@@ -22,6 +22,9 @@ class CrossPointState {
   uint8_t readerActivityLoadCount = 0;
   bool lastSleepFromReader = false;
   bool showBootScreen = true;
+  // Not persisted: set by enterDeepSleep() when the dashboard activity is on
+  // screen, read by SleepActivity to keep the dashboard visible during sleep.
+  bool sleepingFromDashboard = false;
 
   // Returns true if idx was shown within the last checkCount picks.
   // Walks backwards from the most recently written slot.

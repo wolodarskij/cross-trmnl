@@ -32,6 +32,8 @@ class CrossPointSettings {
     BLANK = 4,
     COVER_CUSTOM = 5,
     QUICK_RESUME = 6,
+    DASHBOARD = 7,             // last fetched dashboard image, no network on sleep
+    DASHBOARD_AUTOUPDATE = 8,  // fetch a fresh dashboard image on every sleep
     SLEEP_SCREEN_MODE_COUNT
   };
   enum SLEEP_SCREEN_COVER_MODE { FIT = 0, CROP = 1, SLEEP_SCREEN_COVER_MODE_COUNT };
@@ -181,6 +183,10 @@ class CrossPointSettings {
     QUICK_RESUME_SLEEP_SCREEN_COUNT
   };
 
+  // Where the dashboard image comes from: a plain BMP URL ("simple") or a
+  // TRMNL-compatible server (self-hosted BYOS) speaking /api/setup + /api/display.
+  enum DASHBOARD_SOURCE { DASHBOARD_SOURCE_SIMPLE = 0, DASHBOARD_SOURCE_TRMNL = 1, DASHBOARD_SOURCE_COUNT };
+
   // Sleep screen settings
   uint8_t sleepScreen = DARK;
   // Sleep screen cover mode settings
@@ -257,6 +263,16 @@ class CrossPointSettings {
   uint8_t focusReadingEnabled = 0;
   // SD card font family name (empty = use built-in fontFamily)
   char sdFontFamilyName[32] = "";
+  // URL of the networked dashboard image (1-bit/greyscale BMP, e.g. our
+  // dashboard_server.py). Fetched on demand from the home menu and on each sleep
+  // when sleepScreen == DASHBOARD/DASHBOARD_AUTOUPDATE.
+  char dashboardUrl[128] = "";
+  // Which dashboard backend the fetch uses (DASHBOARD_SOURCE enum).
+  uint8_t dashboardSource = DASHBOARD_SOURCE_SIMPLE;
+  // TRMNL/BYOS base URL (e.g. http://192.168.178.20:4567) and device API key.
+  // An empty key triggers auto-provisioning via GET /api/setup on first fetch.
+  char trmnlUrl[96] = "";
+  char trmnlApiKey[48] = "";
   // Show hidden files/directories (starting with '.') in the file browser (0 = hidden, 1 = show)
   uint8_t showHiddenFiles = 0;
   // Remove a book from the Recent Books list when its End-of-Book screen is reached (0 = off, 1 = on)
