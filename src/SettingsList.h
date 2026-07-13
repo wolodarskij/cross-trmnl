@@ -103,10 +103,23 @@ inline std::vector<SettingInfo> getSettingsList(const SdCardFontRegistry* regist
   static const std::vector<SettingInfo> baseList = [] {
     std::vector<SettingInfo> v = {
         // --- Display ---
+        // NOTE: label order is positional — enumValues[value] must line up with
+        // SLEEP_SCREEN_MODE (DARK, LIGHT, CUSTOM, COVER, BLANK, COVER_CUSTOM,
+        // QUICK_RESUME, DASHBOARD, DASHBOARD_AUTOUPDATE). Do not "sort" this list.
         SettingInfo::Enum(StrId::STR_SLEEP_SCREEN, &CrossPointSettings::sleepScreen,
-                          {StrId::STR_DARK, StrId::STR_LIGHT, StrId::STR_CUSTOM, StrId::STR_COVER,
-                           StrId::STR_COVER_CUSTOM, StrId::STR_NONE_OPT, StrId::STR_QUICK_RESUME},
+                          {StrId::STR_DARK, StrId::STR_LIGHT, StrId::STR_CUSTOM, StrId::STR_COVER, StrId::STR_NONE_OPT,
+                           StrId::STR_COVER_CUSTOM, StrId::STR_QUICK_RESUME, StrId::STR_DASHBOARD,
+                           StrId::STR_DASHBOARD_AUTOUPDATE},
                           "sleepScreen", StrId::STR_CAT_DISPLAY),
+        SettingInfo::Enum(StrId::STR_DASHBOARD_SOURCE, &CrossPointSettings::dashboardSource,
+                          {StrId::STR_DASHBOARD_SOURCE_SIMPLE, StrId::STR_TRMNL}, "dashboardSource",
+                          StrId::STR_CAT_DISPLAY),
+        SettingInfo::String(StrId::STR_DASHBOARD_URL, SETTINGS.dashboardUrl, sizeof(SETTINGS.dashboardUrl),
+                            "dashboardUrl", StrId::STR_CAT_DISPLAY),
+        SettingInfo::String(StrId::STR_TRMNL_URL, SETTINGS.trmnlUrl, sizeof(SETTINGS.trmnlUrl), "trmnlUrl",
+                            StrId::STR_CAT_DISPLAY),
+        SettingInfo::String(StrId::STR_TRMNL_API_KEY, SETTINGS.trmnlApiKey, sizeof(SETTINGS.trmnlApiKey),
+                            "trmnlApiKey", StrId::STR_CAT_DISPLAY),
         SettingInfo::Enum(StrId::STR_SLEEP_COVER_MODE, &CrossPointSettings::sleepScreenCoverMode,
                           {StrId::STR_FIT, StrId::STR_CROP}, "sleepScreenCoverMode", StrId::STR_CAT_DISPLAY),
         SettingInfo::Enum(StrId::STR_SLEEP_COVER_FILTER, &CrossPointSettings::sleepScreenCoverFilter,

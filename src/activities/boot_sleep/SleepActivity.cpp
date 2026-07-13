@@ -15,6 +15,8 @@
 #include "fontIds.h"
 #include "images/Logo120.h"
 #include "images/MoonIcon.h"
+#include "network/DashboardImage.h"
+#include "network/WifiConnector.h"
 
 void SleepActivity::onEnter() {
   Activity::onEnter();
@@ -37,6 +39,14 @@ void SleepActivity::onEnter() {
     GUI.drawPopup(renderer, tr(STR_ENTERING_SLEEP));
   }
 
+  // Sleeping while the dashboard is on screen keeps the dashboard visible,
+  // whatever the configured sleep screen mode. The cache is already fresh from
+  // the activity's own fetch, so only re-fetch when auto-update is opted into.
+  if (APP_STATE.sleepingFromDashboard) {
+    return renderDashboardSleepScreen(SETTINGS.sleepScreen ==
+                                      CrossPointSettings::SLEEP_SCREEN_MODE::DASHBOARD_AUTOUPDATE);
+  }
+
   switch (SETTINGS.sleepScreen) {
     case (CrossPointSettings::SLEEP_SCREEN_MODE::BLANK):
       return renderBlankSleepScreen();
@@ -50,9 +60,41 @@ void SleepActivity::onEnter() {
       } else {
         return renderCustomSleepScreen();
       }
+    case (CrossPointSettings::SLEEP_SCREEN_MODE::DASHBOARD):
+      return renderDashboardSleepScreen(false);
+    case (CrossPointSettings::SLEEP_SCREEN_MODE::DASHBOARD_AUTOUPDATE):
+      return renderDashboardSleepScreen(true);
     default:
       return renderDefaultSleepScreen();
   }
+}
+
+void SleepActivity::renderDashboardSleepScreen(bool autoUpdate) const {
+  // With auto-update, fetch a fresh image on the way into sleep. WiFi is still
+  // available here: enterDeepSleep() (main.cpp) only tears the modem down after
+  // goToSleep() returns, so no teardown is needed in this path. On any failure
+  // the previously cached image is kept and rendered instead.
+  if (autoUpdate && DashboardImage::isConfigured() && WifiConnector::connectToSaved()) {
+    DashboardImage::fetchToCache();
+  }
+
+  HalFile file;
+  if (Storage.openFileForRead("SLP", DashboardImage::kCachePath, file)) {
+    Bitmap bitmap(file, true);
+    if (bitmap.parseHeaders() == BmpReaderError::Ok) {
+      LOG_DBG("SLP", "Rendering dashboard sleep screen");
+      // Landscape images (e.g. TRMNL's 800x480) render full-screen by
+      // switching the renderer orientation for the draw; drawBitmap and the
+      // logical dims inside renderBitmapSleepScreen follow it.
+      const bool landscape = bitmap.getWidth() > bitmap.getHeight();
+      if (landscape) renderer.setOrientation(GfxRenderer::Orientation::LandscapeCounterClockwise);
+      renderBitmapSleepScreen(bitmap);
+      if (landscape) renderer.setOrientation(GfxRenderer::Orientation::Portrait);
+      return;
+    }
+  }
+
+  renderDefaultSleepScreen();
 }
 
 void SleepActivity::renderCustomSleepScreen() const {

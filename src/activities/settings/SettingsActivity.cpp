@@ -23,6 +23,7 @@
 #include "StatusBarSettingsActivity.h"
 #include "activities/network/WifiSelectionActivity.h"
 #include "activities/util/IntervalSelectionActivity.h"
+#include "activities/util/KeyboardEntryActivity.h"
 #include "components/UITheme.h"
 #include "fontIds.h"
 
@@ -257,6 +258,25 @@ void SettingsActivity::toggleCurrentSetting() {
     } else {
       SETTINGS.*(setting.valuePtr) = currentValue + setting.valueRange.step;
     }
+  } else if (setting.type == SettingType::STRING && setting.stringOffset) {
+    // Direct char[] settings are edited with the on-screen keyboard. The only
+    // device-visible one today is the Dashboard URL, so the URL layout (with
+    // ://, snippets etc.) is the right default.
+    char* strPtr = (char*)&SETTINGS + setting.stringOffset;
+    const size_t maxLen = setting.stringMaxLen;
+    startActivityForResult(
+        std::make_unique<KeyboardEntryActivity>(renderer, mappedInput, I18N.get(setting.nameId), strPtr, maxLen - 1,
+                                                InputType::Url),
+        [this, strPtr, maxLen](const ActivityResult& result) {
+          if (!result.isCancelled) {
+            const auto& kb = std::get<KeyboardResult>(result.data);
+            strncpy(strPtr, kb.text.c_str(), maxLen - 1);
+            strPtr[maxLen - 1] = '\0';
+            SETTINGS.saveToFile();
+          }
+          rebuildSettingsLists();
+        });
+    return;
   } else if (setting.type == SettingType::ACTION) {
     auto resultHandler = [this](const ActivityResult&) { SETTINGS.saveToFile(); };
 
@@ -406,6 +426,13 @@ void SettingsActivity::render(RenderLock&&) {
           } else {
             valueText = std::to_string(SETTINGS.*(setting.valuePtr));
           }
+        } else if (setting.type == SettingType::STRING && setting.stringOffset) {
+          // Direct char[] settings (e.g. Dashboard URL). Truncate long values so
+          // the row stays readable.
+          const char* strPtr = (const char*)&SETTINGS + setting.stringOffset;
+          valueText = strPtr;
+          constexpr size_t kMaxShown = 24;
+          if (valueText.size() > kMaxShown) valueText = valueText.substr(0, kMaxShown - 3) + "...";
         }
         return valueText;
       },
