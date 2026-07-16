@@ -29,6 +29,11 @@ CrossPoint README, preserved verbatim).
     on-device PNG→BMP conversion.
 - Landscape (800×480) images render full-screen via display rotation;
   4-level grayscale renders everywhere; URL settings editable on-device.
+- **Script execution (Lua)** — a **Scripts** home-menu entry runs `.lua` files
+  from the SD card `/scripts` folder. Scripts get a sandboxed device API to
+  draw, read buttons, read/write files, and fetch over WiFi; Back aborts any
+  script, memory is capped, and errors are caught. See
+  [docs/SCRIPTING.md](./docs/SCRIPTING.md).
 
 **The complete change list vs. upstream is in [FEATURES.md](./FEATURES.md).**
 
