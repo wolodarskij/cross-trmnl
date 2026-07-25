@@ -438,6 +438,19 @@ void GfxRenderer::drawPixel(const int x, const int y, const bool state) const {
   }
 }
 
+bool GfxRenderer::getPixel(const int x, const int y) const {
+  int phyX = 0;
+  int phyY = 0;
+  rotateCoordinates(orientation, x, y, &phyX, &phyY, panelWidth, panelHeight);
+  if (phyX < 0 || phyX >= panelWidth || phyY < 0 || phyY >= panelHeight) {
+    return false;
+  }
+  const uint32_t byteIndex = static_cast<uint32_t>(phyY) * panelWidthBytes + (phyX / 8);
+  const uint8_t bitPosition = 7 - (phyX % 8);
+  // drawPixel(state = true) CLEARS the bit, so a cleared bit is black.
+  return (frameBuffer[byteIndex] & (1 << bitPosition)) == 0;
+}
+
 int GfxRenderer::getTextWidth(const int fontId, const char* text, const EpdFontFamily::Style style,
                               const BidiUtils::BidiBaseDir baseDir) const {
   if (text == nullptr || *text == '\0') {
@@ -775,6 +788,25 @@ void GfxRenderer::drawPixelDither<Color::LightGray>(const int x, const int y) co
 template <>
 void GfxRenderer::drawPixelDither<Color::DarkGray>(const int x, const int y) const {
   drawPixel(x, y, (x + y) % 2 == 0);  // TODO: maybe find a better pattern?
+}
+
+void GfxRenderer::drawPixelDither(const int x, const int y, Color color) const {
+  switch (color) {
+    case Color::Clear:
+      break;
+    case Color::Black:
+      drawPixelDither<Color::Black>(x, y);
+      break;
+    case Color::White:
+      drawPixelDither<Color::White>(x, y);
+      break;
+    case Color::LightGray:
+      drawPixelDither<Color::LightGray>(x, y);
+      break;
+    case Color::DarkGray:
+      drawPixelDither<Color::DarkGray>(x, y);
+      break;
+  }
 }
 
 void GfxRenderer::fillRectDither(const int x, const int y, const int width, const int height, Color color) const {

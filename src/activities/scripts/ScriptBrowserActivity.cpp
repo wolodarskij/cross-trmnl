@@ -30,7 +30,13 @@ void ScriptBrowserActivity::loadScripts() {
     if (!f.isDirectory()) {
       f.getName(name, sizeof(name));
       std::string_view fn{name};
-      if (name[0] != '.' && FsHelpers::checkFileExtension(fn, ".lua")) {
+      // Both extensions are listed rather than deduplicated. When a card carries
+      // adventure.lua and adventure.luac, which one runs is a choice worth
+      // having — the source reports file:line on an error, the bytecode loads
+      // in less memory. require() has no user to ask, which is why it silently
+      // prefers .luac and this list does not.
+      if (name[0] != '.' &&
+          (FsHelpers::checkFileExtension(fn, ".lua") || FsHelpers::checkFileExtension(fn, ".luac"))) {
         scripts_.emplace_back(name);
       }
     }
@@ -82,12 +88,8 @@ void ScriptBrowserActivity::render(RenderLock&&) {
 
   renderer.clearScreen();
 
-  Rect header;
-  header.x = 0;
-  header.y = 8;
-  header.width = w;
-  header.height = 40;
-  GUI.drawHeader(renderer, header, tr(STR_SCRIPTS));
+  const auto& metrics = UITheme::getInstance().getMetrics();
+  GUI.drawHeader(renderer, Rect{0, metrics.topPadding, w, metrics.headerHeight}, tr(STR_SCRIPTS));
 
   if (scripts_.empty()) {
     renderer.drawCenteredText(UI_10_FONT_ID, h / 2 - 12, tr(STR_NO_SCRIPTS));
@@ -99,7 +101,7 @@ void ScriptBrowserActivity::render(RenderLock&&) {
   }
 
   const int lineH = renderer.getLineHeight(UI_10_FONT_ID) + 6;
-  const int top = 60;
+  const int top = metrics.topPadding + metrics.headerHeight + metrics.verticalSpacing;
   const int footerH = 34;
   const int perPage = std::max(1, (h - top - footerH) / lineH);
 

@@ -43,7 +43,11 @@ std::vector<String> HalStorage::listFiles(const char* path, int maxFiles) {
   HAL_STORAGE_WRAPPED_CALL(listFiles, path, maxFiles);
 }
 
-String HalStorage::readFile(const char* path) { HAL_STORAGE_WRAPPED_CALL(readFile, path); }
+size_t HalStorage::maxReadFileBytes() { return SDCardManager::kMaxReadFileBytes; }
+
+String HalStorage::readFile(const char* path, bool* outTruncated, size_t* outFileSize) {
+  HAL_STORAGE_WRAPPED_CALL(readFile, path, outTruncated, outFileSize);
+}
 
 bool HalStorage::readFileToStream(const char* path, Print& out, size_t chunkSize) {
   HAL_STORAGE_WRAPPED_CALL(readFileToStream, path, out, chunkSize);

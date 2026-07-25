@@ -11,6 +11,8 @@ extern "C" {
 #include "lualib.h"
 }
 
+#include "CrossPointSettings.h"
+#include "LuaStrip.h"
 #include "ScriptBindings.h"
 
 namespace {
@@ -52,6 +54,7 @@ ScriptEngine::ScriptEngine(GfxRenderer& renderer, MappedInputManager& input, std
   ctx_.renderer = &renderer;
   ctx_.input = &input;
   ctx_.console = &console;
+  ctx_.engine = this;
 }
 
 ScriptEngine::~ScriptEngine() {
@@ -68,15 +71,51 @@ void* ScriptEngine::alloc(void* ud, void* ptr, size_t osize, size_t nsize) {
     return nullptr;
   }
   // Enforce the cap on growth so a script cannot starve the rest of the device.
+  // Returning nullptr is not fatal: Lua responds by running an emergency full
+  // collection and retrying, and only raises LUA_ERRMEM if that also fails.
   const size_t projected = self->memUsed_ - (ptr ? osize : 0) + nsize;
-  if (projected > self->memLimit_) return nullptr;  // Lua raises "not enough memory"
+  if (projected > self->memLimit_) return nullptr;
   void* np = realloc(ptr, nsize);
   if (!np) return nullptr;
   self->memUsed_ = projected;
+  if (projected > self->memPeak_) self->memPeak_ = projected;
   return np;
 }
 
 bool ScriptEngine::begin() {
+  // Re-clamp the reserve read from settings. JsonSettingsIO already range-checks
+  // it on load, but settings.json is a plain file on a removable card: a value
+  // that reaches here out of range would hand a script the heap the failure
+  // screen needs to report that very failure.
+  uint8_t reserveKb = SETTINGS.scriptHeapReserveKb;
+  if (reserveKb < CrossPointSettings::MIN_SCRIPT_HEAP_RESERVE_KB) {
+    reserveKb = CrossPointSettings::MIN_SCRIPT_HEAP_RESERVE_KB;
+  } else if (reserveKb > CrossPointSettings::MAX_SCRIPT_HEAP_RESERVE_KB) {
+    reserveKb = CrossPointSettings::MAX_SCRIPT_HEAP_RESERVE_KB;
+  }
+  heapReserve_ = static_cast<size_t>(reserveKb) * 1024;
+
+  // Size the budget from the heap that is actually free right now, rather than
+  // hard-coding one number for every device state. Whatever is left after the
+  // reserve is a script's to use, clamped to a sane band so a momentarily
+  // fragmented heap cannot shrink the budget below what a real game needs, and
+  // a generous one cannot let a script claim everything.
+  const size_t freeHeap = ESP.getFreeHeap();
+  size_t budget = (freeHeap > heapReserve_) ? (freeHeap - heapReserve_) : 0;
+  // Remember which way the clamp went. "96 KB allowed" on its own is unreadable:
+  // it looks like a fixed cap when it is actually the floor overriding a heap
+  // that had nothing to give. Saying which happened is the difference between a
+  // number and a diagnosis.
+  memClamp_ = (budget < kMemFloor) ? Clamp::Floor : (budget > kMemCeiling ? Clamp::Ceiling : Clamp::None);
+  if (budget < kMemFloor) budget = kMemFloor;
+  if (budget > kMemCeiling) budget = kMemCeiling;
+  memLimit_ = budget;
+  memUsed_ = 0;
+  memPeak_ = 0;
+  freeHeapAtStart_ = freeHeap;
+  LOG_INF("LUA", "memory budget %u bytes (free heap %u, reserve %u, clamp %s)", (unsigned)memLimit_,
+          (unsigned)freeHeap, (unsigned)heapReserve_, clampName());
+
   L_ = lua_newstate(&ScriptEngine::alloc, this);
   if (!L_) {
     LOG_ERR("LUA", "lua_newstate failed (OOM)");
@@ -99,8 +138,21 @@ bool ScriptEngine::pump(lua_State* L) {
   if (now - ctx->lastPumpMs < kPumpIntervalMs) return ctx->aborted;
   ctx->lastPumpMs = now;
   ctx->input->update();
-  if (ctx->input->wasPressed(MappedInputManager::Button::Back)) {
-    ctx->aborted = true;
+
+  // Long-hold Back always force-quits (independent of script soft-Back handling).
+  // Short press (release before the hold threshold) queues a soft "back" event.
+  const bool down = ctx->input->isPressed(MappedInputManager::Button::Back);
+  if (down) {
+    if (ctx->backDownMs == 0) {
+      ctx->backDownMs = now;
+    } else if (now - ctx->backDownMs >= kBackHoldExitMs) {
+      ctx->aborted = true;
+    }
+  } else if (ctx->backDownMs != 0) {
+    if (!ctx->aborted && (now - ctx->backDownMs) < kBackHoldExitMs) {
+      ctx->backSoftPending = true;
+    }
+    ctx->backDownMs = 0;
   }
   return ctx->aborted;
 }
@@ -111,13 +163,24 @@ bool ScriptEngine::runFile(const std::string& path, std::string& errorOut) {
     return false;
   }
 
-  const String source = Storage.readFile(path.c_str());
+  bool truncated = false;
+  size_t fileSize = 0;
+  const String source = Storage.readFile(path.c_str(), &truncated, &fileSize);
   if (source.length() == 0 && !Storage.exists(path.c_str())) {
     errorOut = "cannot read script: " + path;
     return false;
   }
+  // Compiling a file the SD layer cut short reports a syntax error at whatever
+  // line the cut landed on, which sends the author hunting a bug that is not
+  // there. Fail on the real reason instead, before the parser ever sees it.
+  if (truncated) {
+    errorOut = scriptbindings::tooLargeMessage(path.c_str(), fileSize);
+    return false;
+  }
 
   ctx_.aborted = false;
+  ctx_.backDownMs = 0;
+  ctx_.backSoftPending = false;
   ctx_.lastPumpMs = millis();
 
   // Push the message handler first so pcall can reference it by index.
@@ -128,6 +191,10 @@ bool ScriptEngine::runFile(const std::string& path, std::string& errorOut) {
   const std::string chunkName = "@" + path;
   int status = luaL_loadbuffer(L_, source.c_str(), source.length(), chunkName.c_str());
   if (status == LUA_OK) {
+    // Before the chunk runs, not after: the debug arrays are dead weight for
+    // its whole lifetime, and the point is to have that weight gone while the
+    // script allocates.
+    if (SETTINGS.scriptStripDebug) luaStripDebugInfo(L_, -1);
     status = lua_pcall(L_, 0, 0, msgh);
   }
 
@@ -136,7 +203,26 @@ bool ScriptEngine::runFile(const std::string& path, std::string& errorOut) {
     const char* msg = lua_tostring(L_, -1);
     errorOut = msg ? msg : "unknown error";
     lua_pop(L_, 1);  // error object
+
+    // An out-of-memory failure arrives with no traceback and no numbers:
+    // luaM_error raises LUA_ERRMEM directly, bypassing the message handler
+    // above. Say how much was in use against how much was allowed, so "not
+    // enough memory" becomes actionable instead of merely true.
+    if (status == LUA_ERRMEM) {
+      // Report the inputs, not just the verdict. The budget is derived from the
+      // free heap at launch minus a reserve, then clamped — so "allowed" alone
+      // cannot tell you whether the device was short of heap or the policy band
+      // was the limit, and those want opposite fixes.
+      char detail[224];
+      snprintf(detail, sizeof(detail),
+               "\n\nUsed %u KB of %u KB allowed.\nFree heap at start %u KB, reserved %u KB, limit set by %s.",
+               (unsigned)((memPeak_ + 1023) / 1024), (unsigned)(memLimit_ / 1024),
+               (unsigned)(freeHeapAtStart_ / 1024), (unsigned)(heapReserve_ / 1024), clampName());
+      errorOut += detail;
+    }
   }
+  LOG_INF("LUA", "%s: lua peak %u/%u bytes, free heap %u", path.c_str(),
+          (unsigned)memPeak_, (unsigned)memLimit_, (unsigned)ESP.getFreeHeap());
   lua_pop(L_, 1);  // message handler
   return ok;
 }

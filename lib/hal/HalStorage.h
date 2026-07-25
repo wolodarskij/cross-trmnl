@@ -16,8 +16,20 @@ class HalStorage {
   bool begin();
   bool ready() const;
   std::vector<String> listFiles(const char* path = "/", int maxFiles = 200);
+
+  // Ceiling on a single readFile(), in bytes. Defined by the SD layer; exposed
+  // here as a call rather than a constant so this header need not pull in
+  // SDCardManager.h, and so there stays exactly one copy of the number.
+  static size_t maxReadFileBytes();
+
   // Read the entire file at `path` into a String. Returns empty string on failure.
-  String readFile(const char* path);
+  //
+  // Reads at most maxReadFileBytes(). If `outTruncated` is given it is set true
+  // when the returned String is shorter than the file — over the cap, or out of
+  // heap. Any caller that hands the result to a parser must check it, or a file
+  // cut mid-token surfaces as a syntax error at an arbitrary line.
+  // `outFileSize` receives the file's true size.
+  String readFile(const char* path, bool* outTruncated = nullptr, size_t* outFileSize = nullptr);
   // Low-memory helpers:
   // Stream the file contents to a `Print` (e.g. `Serial`, or any `Print`-derived object).
   // Returns true on success, false on failure.

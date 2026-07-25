@@ -261,6 +261,19 @@ class CrossPointSettings {
   uint8_t embeddedStyle = 1;
   // Focus Reading - emphasizes the first part of words with bold
   uint8_t focusReadingEnabled = 0;
+  // Heap held back from a running Lua script, in KB. The script budget is the
+  // free heap at launch minus this, clamped to ScriptEngine's policy band — so
+  // lowering it hands a game more memory, at the cost of what renders while the
+  // game is resident. The minimum is not cosmetic: the out-of-memory screen is
+  // drawn while the Lua arena is still allocated, so a reserve near zero turns a
+  // legible failure into a dead device.
+  uint8_t scriptHeapReserveKb = DEFAULT_SCRIPT_HEAP_RESERVE_KB;
+  // Drop per-function debug info (line numbers, local and upvalue names) after
+  // loading a script. Worth ~17 KB on a large game, and costs file:line on every
+  // runtime error — hence off by default.
+  uint8_t scriptStripDebug = 0;
+  // Show the memory read-out after every script ends, not just on failure.
+  uint8_t scriptMemReport = 0;
   // SD card font family name (empty = use built-in fontFamily)
   char sdFontFamilyName[32] = "";
   // URL of the networked dashboard image (1-bit/greyscale BMP, e.g. our
@@ -296,6 +309,15 @@ class CrossPointSettings {
   static constexpr uint8_t MIN_SLEEP_TIMEOUT_MINUTES = 1;
   static constexpr uint8_t SLEEP_TIMEOUT_NEVER_MINUTES = 31;
   static constexpr uint8_t MAX_SLEEP_TIMEOUT_MINUTES = SLEEP_TIMEOUT_NEVER_MINUTES;
+
+  // Bounds for scriptHeapReserveKb. Declared here rather than in ScriptEngine
+  // because three places need the same numbers — the settings row, the JSON
+  // loader's range clamp, and the engine's own re-clamp against a hand-edited
+  // file — and three copies of a bound is how one of them ends up wrong.
+  static constexpr uint8_t MIN_SCRIPT_HEAP_RESERVE_KB = 32;
+  static constexpr uint8_t MAX_SCRIPT_HEAP_RESERVE_KB = 128;
+  static constexpr uint8_t SCRIPT_HEAP_RESERVE_STEP_KB = 8;
+  static constexpr uint8_t DEFAULT_SCRIPT_HEAP_RESERVE_KB = 72;
 
   // Callback to resolve SD card font IDs. Set by SdCardFontSystem::begin().
   // Returns font ID or 0 if not found.
