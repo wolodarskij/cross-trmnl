@@ -206,6 +206,15 @@ inline std::vector<SettingInfo> getSettingsList(const SdCardFontRegistry* regist
                             "removeReadBooksFromRecents", StrId::STR_CAT_SYSTEM),
         SettingInfo::Toggle(StrId::STR_MOVE_FINISHED_TO_READ, &CrossPointSettings::moveFinishedToReadFolder,
                             "moveFinishedToReadFolder", StrId::STR_CAT_SYSTEM),
+        SettingInfo::Value(StrId::STR_SCRIPT_HEAP_RESERVE, &CrossPointSettings::scriptHeapReserveKb,
+                           {CrossPointSettings::MIN_SCRIPT_HEAP_RESERVE_KB,
+                            CrossPointSettings::MAX_SCRIPT_HEAP_RESERVE_KB,
+                            CrossPointSettings::SCRIPT_HEAP_RESERVE_STEP_KB},
+                           "scriptHeapReserveKb", StrId::STR_CAT_SYSTEM),
+        SettingInfo::Toggle(StrId::STR_SCRIPT_STRIP_DEBUG, &CrossPointSettings::scriptStripDebug, "scriptStripDebug",
+                            StrId::STR_CAT_SYSTEM),
+        SettingInfo::Toggle(StrId::STR_SCRIPT_MEM_REPORT, &CrossPointSettings::scriptMemReport, "scriptMemReport",
+                            StrId::STR_CAT_SYSTEM),
 
         // --- KOReader Sync (web-only, uses KOReaderCredentialStore) ---
         SettingInfo::DynamicString(
