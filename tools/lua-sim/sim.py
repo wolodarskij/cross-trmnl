@@ -119,7 +119,7 @@ def fmt_kb(n):
 
 
 # ---- SD whole-file read cap --------------------------------------------------
-# SDCardManager::kMaxReadFileBytes. Every device-side whole-file read — the main
+# HalStorage::kMaxReadFileBytes. Every device-side whole-file read — the main
 # script, each require()d module, fs.read, and the read half of fs.append —
 # lands in one contiguous Arduino String on the general ESP32 heap, so the
 # firmware caps it and refuses anything larger. Mirrored here because a

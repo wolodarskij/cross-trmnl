@@ -27,7 +27,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(os.path.dirname(HERE))
 LUAC = os.path.join(HERE, "bin", "luac.exe" if os.name == "nt" else "luac")
 
-# SDCardManager::kMaxReadFileBytes. Every whole-file read on the device lands in
+# HalStorage::kMaxReadFileBytes. Every whole-file read on the device lands in
 # one contiguous Arduino String on a ~275 KB heap, so the firmware refuses
 # anything larger — for bytecode exactly as for source.
 MAX_READ_BYTES = 50000

@@ -90,7 +90,7 @@ longer than one `build.py`.
 ## Limits that still apply
 
 Bytecode is subject to the same **50,000-byte** whole-file read cap as source
-(`SDCardManager::kMaxReadFileBytes`); `compile_tree.py` fails the build on any
+(`HalStorage::kMaxReadFileBytes`); `compile_tree.py` fails the build on any
 output that exceeds it, with the same wording the firmware uses.
 
 `require` accepting bytecode is a real widening of the sandbox: `lundump` does

@@ -43,10 +43,84 @@ std::vector<String> HalStorage::listFiles(const char* path, int maxFiles) {
   HAL_STORAGE_WRAPPED_CALL(listFiles, path, maxFiles);
 }
 
-size_t HalStorage::maxReadFileBytes() { return SDCardManager::kMaxReadFileBytes; }
+size_t HalStorage::maxReadFileBytes() { return kMaxReadFileBytes; }
 
+// Whole-file read, implemented here rather than forwarded to the SDK.
+//
+// The SDK's own readFile silently truncates at its own 50 KB ceiling and cannot
+// report which of "over the cap" or "out of heap" happened. Both matter: a file
+// cut mid-token reaches a parser as a syntax error at an arbitrary line, which
+// sends the author hunting a bug that is not there. Rather than patch the
+// vendored submodule (an edit the parent repo cannot even record, so fresh
+// clones would not build), the cap and the truncation contract live on our side
+// of the HAL boundary, built from primitives the SDK already exposes.
 String HalStorage::readFile(const char* path, bool* outTruncated, size_t* outFileSize) {
-  HAL_STORAGE_WRAPPED_CALL(readFile, path, outTruncated, outFileSize);
+  // Cleared first: callers declare these once and do not re-initialize them
+  // after the call, so every return path below must leave them meaningful.
+  if (outTruncated) *outTruncated = false;
+  if (outFileSize) *outFileSize = 0;
+
+  // One lock for the whole open→read→close, so no other task interleaves inside
+  // a single file's read. Re-entrant by construction: openFileForRead and each
+  // HalFile call take it again, and the mutex is recursive (see the ctor).
+  StorageLock lock;
+
+  if (!ready()) {
+    LOG_ERR("SD", "not initialized; cannot read %s", path);
+    return String();
+  }
+
+  HalFile f;
+  // Logs whether it was missing or unopenable, tagged "SD" — same message the
+  // SDK's own readFile produced, since this is the primitive it used too.
+  if (!openFileForRead("SD", path, f)) return String();
+
+  const size_t fileSize = f.fileSize();
+  if (outFileSize) *outFileSize = fileSize;
+  const size_t wantSize = fileSize < kMaxReadFileBytes ? fileSize : kMaxReadFileBytes;
+
+  // Reserve up front. Growing an Arduino String by appending reallocs roughly
+  // every 16 bytes, so a 25 KB file would cost ~1600 grow-copy-free cycles — on
+  // a heap this size with no PSRAM that is a fragmentation source, not merely
+  // slow. One allocation of the known size instead.
+  //
+  // A failed reserve is not cosmetic: concat swallows a failed grow, so reading
+  // on regardless would hand back a short string that looks like a whole file.
+  // Stop here and report the short read.
+  String content;
+  if (wantSize > 0 && !content.reserve(wantSize)) {
+    LOG_ERR("SD", "%s: no heap for a %u-byte read", path, static_cast<unsigned>(wantSize));
+    if (outTruncated) *outTruncated = true;
+    return String();
+  }
+
+  // Block reads rather than byte-at-a-time: fewer per-byte calls into SdFat, and
+  // one memcpy per chunk. concat(ptr, len) is the length-taking overload, so
+  // embedded NULs survive — .luac bytecode is read through here.
+  constexpr size_t kReadChunkBytes = 256;  // matches readFileToStream's default
+  char buf[kReadChunkBytes];
+  size_t readSize = 0;
+  while (readSize < wantSize) {
+    const size_t remaining = wantSize - readSize;
+    const size_t chunk = remaining < kReadChunkBytes ? remaining : kReadChunkBytes;
+    const int got = f.read(buf, chunk);
+    if (got <= 0) break;  // EOF or read error; the truncation check below reports it
+    if (!content.concat(buf, static_cast<unsigned>(got))) break;  // cannot happen after reserve
+    readSize += static_cast<size_t>(got);
+  }
+  // Not closed explicitly: HalFile's destructor closes under the lock
+  // (DESTRUCTOR_CLOSES_FILE), which is the convention for a local handle.
+
+  // Comparing the string against the file's true size covers every cause at
+  // once — over the cap, a short read, a failed append — so no shortfall can
+  // escape as a whole-looking file.
+  const bool truncated = content.length() < fileSize;
+  if (truncated) {
+    LOG_ERR("SD", "%s TRUNCATED: read %u of %u bytes (cap %u)", path, static_cast<unsigned>(content.length()),
+            static_cast<unsigned>(fileSize), static_cast<unsigned>(kMaxReadFileBytes));
+  }
+  if (outTruncated) *outTruncated = truncated;
+  return content;
 }
 
 bool HalStorage::readFileToStream(const char* path, Print& out, size_t chunkSize) {

@@ -295,7 +295,7 @@ saving, and the device does no work for it.
 ### File size
 
 A second, separate ceiling, and the one a growing story file meets first: **no
-file is read as a whole above 50,000 bytes** (`SDCardManager::kMaxReadFileBytes`)
+file is read as a whole above 50,000 bytes** (`HalStorage::kMaxReadFileBytes`)
 — not the script, not a `require`d module, not `fs.read` or the read half of
 `fs.append`.
 
