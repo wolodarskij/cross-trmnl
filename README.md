@@ -61,6 +61,16 @@ git submodule update --init --recursive
 pio run -e default        # output: .pio/build/default/firmware.bin
 ```
 
+On Windows use `build.bat` instead — same thing, but it forces Python to UTF-8
+first, without which PlatformIO's console writer dies on a cp1252 console and
+the failure looks like a compile error:
+
+```
+build.bat                 build the default env
+build.bat default upload  build, then flash over USB
+build.bat slim clean      any env, any pio target
+```
+
 Then install it either way:
 
 - **SD Card Firmware Update** (if the device already runs CrossPoint or

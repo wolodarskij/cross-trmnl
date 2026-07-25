@@ -9,6 +9,10 @@ lib/I18n/I18nStrings.cpp
 *.generated.h
 .vs
 build
+# Compiled Lua card tree and its intermediate pack staging (build_scripts.bat).
+# The source of truth is lua-scripts-src/, which is committed.
+lua-scripts-build/
+lua-scripts-stage/
 **/__pycache__/
 /compile_commands.json
 /.cache
@@ -19,6 +23,8 @@ build
 lib/EpdFont/scripts/downloaded_fonts/
 lib/EpdFont/scripts/instanced_fonts/
 lib/EpdFont/scripts/output/
+# Host luac: built on demand from lib/Lua by tools/luac/build.py
+tools/luac/bin/
 # Claude Code: share project skills with the team, keep local agent state
 # (worktrees, scheduled-task locks, settings.local, scout CLEANUP.md) out.
 .claude/*
