@@ -168,6 +168,12 @@ class GfxRenderer {
 
   // Drawing
   void drawPixel(int x, int y, bool state = true) const;
+  // Read back one logical pixel; true means black, the same sense in which
+  // drawPixel(x, y, true) writes. Off-screen reads return white rather than
+  // logging: a read has nothing to corrupt. Always reads the framebuffer, not
+  // an active strip target — strips exist for grayscale streaming, which only
+  // writes.
+  bool getPixel(int x, int y) const;
   void drawLine(int x1, int y1, int x2, int y2, bool state = true) const;
   void drawLine(int x1, int y1, int x2, int y2, int lineWidth, bool state) const;
   void drawArc(int maxRadius, int cx, int cy, int xDir, int yDir, int lineWidth, bool state) const;
@@ -179,6 +185,10 @@ class GfxRenderer {
   void maskRoundedRectOutsideCorners(int x, int y, int width, int height, int radius, Color color = Color::White) const;
   void fillRect(int x, int y, int width, int height, bool state = true) const;
   void fillRectDither(int x, int y, int width, int height, Color color) const;
+  // Runtime-Color counterpart of the drawPixelDither<C> templates, for callers
+  // that only learn the level at runtime (e.g. the Lua screen bindings). Keeps
+  // the dither predicates in one place instead of letting callers re-derive them.
+  void drawPixelDither(int x, int y, Color color) const;
   void fillRoundedRect(int x, int y, int width, int height, int cornerRadius, Color color) const;
   void fillRoundedRect(int x, int y, int width, int height, int cornerRadius, bool roundTopLeft, bool roundTopRight,
                        bool roundBottomLeft, bool roundBottomRight, Color color) const;

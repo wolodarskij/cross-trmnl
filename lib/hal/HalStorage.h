@@ -16,8 +16,34 @@ class HalStorage {
   bool begin();
   bool ready() const;
   std::vector<String> listFiles(const char* path = "/", int maxFiles = 200);
+
+  // Ceiling on a single readFile(), in bytes. The result is one contiguous
+  // Arduino String on the general heap, so this is a heap-protection limit, not
+  // a filesystem one: use readFileToStream/readFileToBuffer for anything bigger.
+  //
+  // The number lives here, not in the SD SDK, because it is a policy of *this*
+  // device (no PSRAM, ~275 KB heap) rather than a property of the card. Keeping
+  // it on our side of the boundary is what lets the vendored SDK submodule stay
+  // pristine — see readFile's implementation note in HalStorage.cpp.
+  static constexpr size_t kMaxReadFileBytes = 50000;
+
+  // Also exposed as a call, for callers that would rather not depend on the
+  // constant's home. One number either way.
+  static size_t maxReadFileBytes();
+
   // Read the entire file at `path` into a String. Returns empty string on failure.
-  String readFile(const char* path);
+  //
+  // Reads at most kMaxReadFileBytes. If `outTruncated` is given it is set true
+  // when the returned String is shorter than the file — over the cap, or out of
+  // heap. Any caller that hands the result to a parser must check it, or a file
+  // cut mid-token surfaces as a syntax error at an arbitrary line.
+  // `outFileSize` receives the file's true size, for saying by how much it
+  // overran. Both out-params are cleared on entry, so a caller may read them
+  // after any return path.
+  //
+  // Binary-safe: the returned String may contain NUL bytes and length() counts
+  // them, which is what lets require() load compiled .luac bytecode.
+  String readFile(const char* path, bool* outTruncated = nullptr, size_t* outFileSize = nullptr);
   // Low-memory helpers:
   // Stream the file contents to a `Print` (e.g. `Serial`, or any `Print`-derived object).
   // Returns true on success, false on failure.

@@ -22,7 +22,7 @@ transfer, and everything else remain untouched upstream code.
   caught and shown with a traceback, and unsafe stdlib (`os.execute`, `io`,
   `require`, `debug`) is removed.
 - Full API + samples: [docs/SCRIPTING.md](./docs/SCRIPTING.md),
-  [examples/scripts/](./examples/scripts).
+  [lua-scripts-src/](./lua-scripts-src).
 
 ### Dashboard viewer (home menu)
 - New **Dashboard** entry on the home screen: connects WiFi (normal selection
@@ -99,7 +99,7 @@ New files:
 | `src/scripting/ScriptBindings.{h,cpp}` | the `screen`/`input`/`fs`/`http`/`device` API |
 | `src/activities/scripts/ScriptBrowserActivity.{h,cpp}` | `/scripts` file list |
 | `src/activities/scripts/ScriptRunActivity.{h,cpp}` | run a script + show result/errors |
-| `docs/SCRIPTING.md`, `examples/scripts/*` | scripting docs + sample scripts |
+| `docs/SCRIPTING.md`, `lua-scripts-src/*` | scripting docs + sample scripts |
 | `FEATURES.md` | this document |
 
 Modified files (all changes small and localized):

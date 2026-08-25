@@ -28,11 +28,21 @@ class ScriptRunActivity final : public Activity {
  private:
   enum State { RUNNING, FINISHED };
   void runScript();
+  // Two compact lines of memory figures, empty unless the setting is on. Built
+  // once and drawn by whichever end-of-run branch applies, so success, error
+  // and abort cannot drift apart in what they report.
+  std::vector<std::string> memoryReportLines() const;
+  // Draws those lines over an already-composed screen, top-aligned on its own
+  // cleared strip, and returns the height consumed (0 when there is nothing to
+  // report). The strip is needed because on success the script's own artwork is
+  // still on screen underneath.
+  int drawMemoryReport(int w) const;
 
   std::string path_;
   std::string scriptName_;
   State state_ = RUNNING;
   bool started_ = false;
+  bool splashDrawn_ = false;  // once true, RUNNING renders are stale no-ops
   bool ok_ = false;
   bool aborted_ = false;
   bool wifiStarted_ = false;
