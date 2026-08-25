@@ -1,14 +1,28 @@
 # cross-trmnl — changes vs. upstream CrossPoint Reader
 
 This fork of [CrossPoint Reader](https://github.com/crosspoint-reader/crosspoint-reader)
-adds a **networked dashboard**: the device fetches a full-screen image over
-WiFi and shows it on demand and/or as the sleep screen — turning the X4 into a
-TRMNL-style e-ink dashboard that is still a full e-book reader.
+adds two things on top of the reader: a **networked dashboard** (the device
+fetches a full-screen image over WiFi and shows it on demand and/or as the
+sleep screen) and **Lua script execution** (run programs from the SD card).
 
 All changes are additive; the reader, EPUB engine, fonts, themes, file
 transfer, and everything else remain untouched upstream code.
 
 ## Features
+
+### Script execution (Lua)
+- New **Scripts** entry on the home menu: lists `.lua` files from the SD card
+  `/scripts` folder; Confirm runs one, Back returns.
+- Embedded **Lua 5.4** interpreter with a device API — scripts can draw on the
+  e-ink screen (`screen`), read buttons (`input`), read/write SD files (`fs`,
+  writes confined to `/scripts`), fetch over WiFi (`http.get`, connects
+  automatically), and query the device (`device.battery`/`mac`/`version`/…).
+- Sandboxed and crash-proof: **Back aborts** any script (a VM hook interrupts
+  even infinite loops), a **memory cap** stops runaway allocation, errors are
+  caught and shown with a traceback, and unsafe stdlib (`os.execute`, `io`,
+  `require`, `debug`) is removed.
+- Full API + samples: [docs/SCRIPTING.md](./docs/SCRIPTING.md),
+  [examples/scripts/](./examples/scripts).
 
 ### Dashboard viewer (home menu)
 - New **Dashboard** entry on the home screen: connects WiFi (normal selection
@@ -80,6 +94,12 @@ New files:
 | `src/network/DashboardImage.{h,cpp}` | shared fetch/cache + source dispatch |
 | `src/network/TrmnlClient.{h,cpp}` | TRMNL/BYOS device-API client |
 | `src/network/WifiConnector.{h,cpp}` | headless saved-network WiFi connect |
+| `lib/Lua/*` | vendored Lua 5.4.7 (safe subset; custom `luaconf.h`/`linit.c`) |
+| `src/scripting/ScriptEngine.{h,cpp}` | sandboxed Lua VM: mem cap, abort hook, error capture |
+| `src/scripting/ScriptBindings.{h,cpp}` | the `screen`/`input`/`fs`/`http`/`device` API |
+| `src/activities/scripts/ScriptBrowserActivity.{h,cpp}` | `/scripts` file list |
+| `src/activities/scripts/ScriptRunActivity.{h,cpp}` | run a script + show result/errors |
+| `docs/SCRIPTING.md`, `examples/scripts/*` | scripting docs + sample scripts |
 | `FEATURES.md` | this document |
 
 Modified files (all changes small and localized):
@@ -88,10 +108,10 @@ Modified files (all changes small and localized):
 |---|---|
 | `src/CrossPointSettings.h` | `DASHBOARD`/`DASHBOARD_AUTOUPDATE` sleep modes, `DASHBOARD_SOURCE` enum, 3 new string settings |
 | `src/SettingsList.h` | new settings entries; sleep-label order fix |
-| `lib/I18n/translations/english.yaml` | new UI strings |
+| `lib/I18n/translations/english.yaml` | new UI strings (dashboard + scripts) |
 | `src/activities/boot_sleep/SleepActivity.{h,cpp}` | dashboard sleep-screen render (+ landscape) |
-| `src/activities/home/HomeActivity.{h,cpp}` | Dashboard menu item |
-| `src/activities/ActivityManager.{h,cpp}` | `goToDashboard()`, `isDashboardActivity()` |
+| `src/activities/home/HomeActivity.{h,cpp}` | Dashboard + Scripts menu items |
+| `src/activities/ActivityManager.{h,cpp}` | `goToDashboard()`/`goToScripts()`, `isDashboardActivity()` |
 | `src/activities/Activity.h` | `isDashboardActivity()` virtual |
 | `src/activities/settings/SettingsActivity.cpp` | on-device string editing; string value display |
 | `src/CrossPointState.h` | `sleepingFromDashboard` flag (not persisted) |

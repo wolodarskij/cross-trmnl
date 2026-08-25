@@ -10,6 +10,7 @@
 #include "boot_sleep/SleepActivity.h"
 #include "browser/OpdsBookBrowserActivity.h"
 #include "dashboard/DashboardActivity.h"
+#include "scripts/ScriptBrowserActivity.h"
 #include "home/CrashActivity.h"
 #include "home/FileBrowserActivity.h"
 #include "home/HomeActivity.h"
@@ -179,6 +180,10 @@ void ActivityManager::goToFileTransfer() {
 void ActivityManager::goToSettings() { replaceActivity(std::make_unique<SettingsActivity>(renderer, mappedInput)); }
 
 void ActivityManager::goToDashboard() { replaceActivity(std::make_unique<DashboardActivity>(renderer, mappedInput)); }
+
+void ActivityManager::goToScripts() {
+  replaceActivity(std::make_unique<ScriptBrowserActivity>(renderer, mappedInput));
+}
 
 void ActivityManager::goToFileBrowser(std::string path) {
   replaceActivity(std::make_unique<FileBrowserActivity>(renderer, mappedInput, std::move(path)));
