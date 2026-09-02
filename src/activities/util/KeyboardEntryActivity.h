@@ -33,8 +33,15 @@ class KeyboardEntryActivity : public Activity {
   void onExit() override;
   void loop() override;
   void render(RenderLock&&) override;
+  // Keep the BLE stack resident while a text field is open, so a connected BLE
+  // keyboard can type into it (the lifecycle would otherwise tear BLE down when
+  // this screen is entered from a non-reader context like Settings).
+  bool keepsBluetoothAlive() const override { return true; }
 
  private:
+  // Drain BLE keyboard events from the MappedInputManager text sink into the
+  // field. Returns false when a drained key completed/cancelled the activity.
+  bool drainBleKeys();
   std::string title;
   std::string text;
   size_t maxLength;

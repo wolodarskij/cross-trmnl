@@ -7,11 +7,13 @@
 
 #include <algorithm>
 #include <cstring>
+#include <iterator>
 #include <string>
 
 #include "BookmarkEntry.h"
 #include "CrossPointSettings.h"
 #include "CrossPointState.h"
+#include "MappedInputManager.h"
 #include "OpdsServerStore.h"
 #include "RecentBooksStore.h"
 #include "SettingsList.h"
@@ -143,6 +145,16 @@ bool JsonSettingsIO::saveSettings(const CrossPointSettings& s, const char* path)
   doc["frontButtonConfirm"] = s.frontButtonConfirm;
   doc["frontButtonLeft"] = s.frontButtonLeft;
   doc["frontButtonRight"] = s.frontButtonRight;
+  // Bluetooth — managed by BluetoothSettingsActivity, not in SettingsList.
+  doc["bluetoothEnabled"] = s.bluetoothEnabled;
+  JsonArray storedBleMap = doc["bleKeyMap"].to<JsonArray>();
+  for (const auto& entry : s.bleKeyMap) {
+    if (entry.keyKind == 0xFF || entry.button == 0xFF) continue;
+    JsonObject object = storedBleMap.add<JsonObject>();
+    object["k"] = entry.keyKind;
+    object["v"] = entry.keyValue;
+    object["b"] = entry.button;
+  }
   // Font family — uses dynamic getter/setter in SettingsList so the generic loop skips it.
   doc["fontFamily"] = s.fontFamily;
   // SD card font family name — not in SettingsList, save manually
@@ -239,6 +251,23 @@ bool JsonSettingsIO::loadSettings(CrossPointSettings& s, const char* json, bool*
   s.frontButtonRight =
       clamp(doc["frontButtonRight"] | (uint8_t)S::FRONT_HW_RIGHT, S::FRONT_BUTTON_HARDWARE_COUNT, S::FRONT_HW_RIGHT);
   CrossPointSettings::validateFrontButtonMapping(s);
+
+  // Bluetooth — managed by BluetoothSettingsActivity, not in SettingsList.
+  s.bluetoothEnabled = clamp(doc["bluetoothEnabled"] | (uint8_t)0, 2, 0);
+  std::fill(std::begin(s.bleKeyMap), std::end(s.bleKeyMap), CrossPointSettings::BleKeyMapEntry{});
+  JsonArrayConst storedBleMap = doc["bleKeyMap"];
+  if (!storedBleMap.isNull()) {
+    uint8_t slot = 0;
+    for (JsonObjectConst object : storedBleMap) {
+      if (slot >= CrossPointSettings::BLE_MAP_CAPACITY) break;
+      const uint8_t button = object["b"] | (uint8_t)0xFF;
+      if (button >= MappedInputManager::kButtonCount) continue;
+      s.bleKeyMap[slot].keyKind = object["k"] | (uint8_t)0xFF;
+      s.bleKeyMap[slot].keyValue = object["v"] | (uint8_t)0;
+      s.bleKeyMap[slot].button = button;
+      ++slot;
+    }
+  }
 
   // Font family — uses dynamic getter/setter in SettingsList so the generic loop skips it.
   const uint8_t storedFontFamily = doc["fontFamily"] | (uint8_t)0;

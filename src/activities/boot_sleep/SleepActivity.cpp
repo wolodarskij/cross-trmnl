@@ -8,6 +8,7 @@
 #include <Txt.h>
 #include <Xtc.h>
 
+#include "BleInput.h"
 #include "CrossPointSettings.h"
 #include "CrossPointState.h"
 #include "activities/reader/ReaderUtils.h"
@@ -74,8 +75,16 @@ void SleepActivity::renderDashboardSleepScreen(bool autoUpdate) const {
   // available here: enterDeepSleep() (main.cpp) only tears the modem down after
   // goToSleep() returns, so no teardown is needed in this path. On any failure
   // the previously cached image is kept and rendered instead.
-  if (autoUpdate && DashboardImage::isConfigured() && WifiConnector::connectToSaved()) {
-    DashboardImage::fetchToCache();
+  if (autoUpdate && DashboardImage::isConfigured()) {
+    // Free the BLE stack BEFORE WiFi comes up: the C3 shares one radio and heap
+    // between the stacks, and the WiFi driver sizes its RX/TX pools at init, so
+    // bringing it up with NimBLE's ~52 KB still resident leaves it starved. This
+    // path is reachable straight from a reader (sleep with BT connected), where
+    // the stack IS resident. No-op when Bluetooth is off.
+    bleinput::stop();
+    if (WifiConnector::connectToSaved()) {
+      DashboardImage::fetchToCache();
+    }
   }
 
   HalFile file;

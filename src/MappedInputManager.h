@@ -1,5 +1,6 @@
 #pragma once
 
+#include <BleKeyboardHost.h>  // NimBLE-free header; stubs when the capability is off
 #include <HalGPIO.h>
 
 class GfxRenderer;
@@ -7,6 +8,9 @@ class GfxRenderer;
 class MappedInputManager {
  public:
   enum class Button { Back, Confirm, Left, Right, Up, Down, Power, PageBack, PageForward, NavNext, NavPrevious };
+  // Number of values in Button (Back..NavPrevious). Used to size the BLE overlay and
+  // to clamp persisted BLE mappings. Keep in sync with the enum above.
+  static constexpr uint8_t kButtonCount = 11;
 
   struct Labels {
     const char* btn1;
@@ -28,6 +32,32 @@ class MappedInputManager {
   // Returns the raw front button index that was pressed this frame (or -1 if none).
   int getPressedFrontButton() const;
 
+  // --- BLE HID keyboard overlay ------------------------------------------------
+  // Drain decoded key events from the FreeInk BLE HID host and translate the ones
+  // bound in SETTINGS.bleKeyMap into per-frame logical-button edges that OR into
+  // wasPressed()/isPressed()/wasReleased(). Call once per main-loop iteration,
+  // right after gpio.update() and BleHid.poll(). No-ops when BLE is compiled out.
+  void pollBle();
+  // True when a mapped BLE key produced an edge this frame — keeps the inactivity
+  // / auto-sleep timer alive while a remote is the only input device in use.
+  bool bleHadActivityThisFrame() const { return bleActivityThisFrame; }
+  // Capture mode: while on, pollBle() stops mapping events and instead stashes the
+  // raw decoded key identity so the button-mapping UI can read it without racing the
+  // live mapping over the single popKey() queue.
+  void setBleCaptureMode(bool on);
+  // Pop a captured (kind, value) key identity grabbed while in capture mode.
+  // Returns false when nothing has been captured since the last call.
+  bool takeCapturedBleKey(uint8_t& kind, uint8_t& value);
+  // Text-sink mode: while on, pollBle() routes every decoded key event into a
+  // ring the active text UI drains with popBleTextKey() — printables carry their
+  // char, editing keys their SpecialKey — instead of mapping them onto logical
+  // buttons. Precedence in pollBle(): capture > text sink > button mapping.
+  // Enabled by KeyboardEntryActivity (and the text editor) in onEnter/onExit.
+  void setBleTextSink(bool on);
+  // Pop the next key event captured while the text sink is on. Returns false
+  // when the ring is empty.
+  bool popBleTextKey(freeink::KeyEvent& out);
+
   // True when the control axis is flipped relative to the physical buttons: the user opted into
   // orientation-following front buttons AND the screen is *currently rendered* rotated (INVERTED /
   // LANDSCAPE_CCW). Keyed on the live renderer orientation rather than the persisted reader setting,
@@ -44,4 +74,25 @@ class MappedInputManager {
   const GfxRenderer& renderer;
 
   bool mapButton(Button button, bool (HalGPIO::*fn)(uint8_t) const) const;
+  // OR-in the BLE overlay for a logical button, mirroring mapButton()'s composite
+  // handling of NavNext/NavPrevious so a remote key bound to Up/Down/Left/Right also
+  // drives list navigation.
+  bool bleEdge(const bool* arr, Button button) const;
+
+  // Per-frame BLE overlay, indexed by (uint8_t)Button.
+  bool blePressEdge[kButtonCount] = {};    // press edge this frame   -> wasPressed / isPressed
+  bool bleReleaseEdge[kButtonCount] = {};  // release edge this frame  -> wasReleased
+  bool bleActivityThisFrame = false;
+  bool bleCaptureMode = false;
+  bool bleHasCaptured = false;
+  uint8_t bleCapturedKind = 0xFF;
+  uint8_t bleCapturedValue = 0;
+
+  // Text-sink ring (single producer pollBle(), single consumer the active text UI,
+  // both on the main task — no locking needed). Sized to match BleHid's own queue.
+  static constexpr uint8_t kBleTextRingLen = 16;
+  bool bleTextSink = false;
+  freeink::KeyEvent bleTextRing[kBleTextRingLen];
+  uint8_t bleTextHead = 0;  // next write
+  uint8_t bleTextTail = 0;  // next read
 };

@@ -1,5 +1,7 @@
 #include "FontDownloadActivity.h"
 
+#include "BleInput.h"
+
 #include <ArduinoJson.h>
 #include <GfxRenderer.h>
 #include <HalStorage.h>
@@ -24,6 +26,9 @@ FontDownloadActivity::FontDownloadActivity(GfxRenderer& renderer, MappedInputMan
 
 void FontDownloadActivity::onEnter() {
   Activity::onEnter();
+  // Free the BLE stack BEFORE bringing WiFi up (shared C3 radio + WiFi driver
+  // sizes its buffer pools at init — see WifiSelectionActivity). No-op when off.
+  bleinput::stop();
   WiFi.mode(WIFI_STA);
   startActivityForResult(std::make_unique<WifiSelectionActivity>(renderer, mappedInput),
                          [this](const ActivityResult& result) { onWifiSelectionComplete(!result.isCancelled); });

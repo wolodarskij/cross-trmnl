@@ -45,6 +45,13 @@ class Activity {
   virtual bool preventAutoSleep() { return false; }
   virtual bool isReaderActivity() const { return false; }
   virtual bool isDashboardActivity() const { return false; }
+  // True if this activity needs the BLE stack resident (beyond the readers, which are
+  // covered by isReaderActivity()). The Bluetooth settings screen overrides this so
+  // pairing/scanning works there. Everywhere else BLE is torn down to free heap.
+  virtual bool keepsBluetoothAlive() const { return false; }
+  // True while the current activity is doing heap-heavy work that must finish
+  // before the BLE stack (~52 KB) may start.
+  virtual bool deferBluetoothStart() const { return false; }
   virtual ScreenshotInfo getScreenshotInfo() const { return {}; }
 
   // Start a new activity without destroying the current one

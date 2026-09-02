@@ -94,6 +94,11 @@ class EpubReaderActivity final : public Activity {
   // in one sitting -- instant reopen comes from Section::suspendBuild() persisting the pages
   // already laid out as a partial file on exit/sleep.
   static constexpr int BUILD_WINDOW_AHEAD = 5;
+  // Heap floors for ticking the background build (upstream feat-bluetooth values). Below
+  // either, a resident BLE stack is shed before the tick — a parse allocation aborting at
+  // maxAlloc ~11 KB with BLE resident was a field crash on the upstream branch.
+  static constexpr size_t BUILD_TICK_MIN_FREE_HEAP = 26 * 1024;
+  static constexpr size_t BUILD_TICK_MIN_MAX_ALLOC = 13 * 1024;
   // Reopening a partial does NOT immediately restart its extension build (a whole-chapter
   // re-layout from page 0 -- minutes of background CPU + SD writes on a giant spine, wasted
   // when the reader never crosses the watermark that session). Instead loop() starts it once

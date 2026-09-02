@@ -265,6 +265,21 @@ bool ActivityManager::isDashboardActivity() const {
          (currentActivity && currentActivity->isDashboardActivity());
 }
 
+bool ActivityManager::currentKeepsBluetoothAlive() const {
+  return currentActivity && currentActivity->keepsBluetoothAlive();
+}
+
+bool ActivityManager::bluetoothShouldBeActive() const {
+  const auto wants = [](const auto& activity) {
+    return activity && (activity->isReaderActivity() || activity->keepsBluetoothAlive());
+  };
+  return std::any_of(stackActivities.begin(), stackActivities.end(), wants) || wants(currentActivity);
+}
+
+bool ActivityManager::bluetoothStartDeferred() const {
+  return currentActivity && currentActivity->deferBluetoothStart();
+}
+
 bool ActivityManager::skipLoopDelay() const { return currentActivity && currentActivity->skipLoopDelay(); }
 
 ScreenshotInfo ActivityManager::getScreenshotInfo() const {

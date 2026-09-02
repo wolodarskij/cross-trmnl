@@ -70,6 +70,46 @@ Two new sleep-screen modes (Settings → Display → Sleep Screen):
   "Cover + Custom" actually enable *Blank* and "None" enable *Cover + Custom*.
   Restored the correct order and documented the invariant.
 
+### Bluetooth HID input (BLE keyboards & page-turner remotes)
+- Built on the FreeInk SDK's vendored `BleKeyboardHost` (NimBLE central,
+  enabled via `FREEINK_CAP_BLE_HID_HOST`) with the field-tested lifecycle from
+  upstream's `feat-bluetooth` branch: scan/pair/bond UI
+  (Settings → Controls → Bluetooth), NVS-persisted bonds with auto-reconnect,
+  a per-button remap UI for remotes, an in-reader Bluetooth toggle, and a
+  status-bar icon while connected.
+- **Strict RAM lifecycle**: the BLE stack is resident only while a reader, the
+  Bluetooth settings screen, or a text field is on the activity stack AND WiFi
+  is off; `begin()`/`end()` return the full ~52 KB to the heap, heap floors
+  defer starts, and heap-starved reader builds shed the stack. `slim` builds
+  compile the capability out entirely (zero flash/RAM).
+- **Keyboard-first additions on top of upstream**: a default navigation map
+  (arrows/Enter/Escape/PageUp/PageDown work with no mapping session) and a
+  text-sink mode that routes full key events into whatever text UI is open —
+  every existing field (WiFi passwords, OPDS search, settings strings) and the
+  text editor accept BLE typing with batched e-ink repaints.
+- BLE only: the ESP32-C3 has no Bluetooth Classic radio.
+
+### Text editor (fork-local)
+- Home-menu editor for `.txt`/`.md` files: line-based editing with the on-screen
+  keyboard, full typing with a BLE keyboard (Enter/Backspace/arrows/Ctrl+S/
+  Escape), new-file creation from the picker, crash-safe atomic saves (temp +
+  rename, the `ProgressFile` pattern, with the temp dropped on any failure), and
+  TxtReader page-cache invalidation so edits show up correctly in the reader.
+- The document lives in RAM as per-line strings (no single large block), gated on
+  **file size (32 KB)**, **line count (1200)**, free heap *and* largest-free-block.
+  The line-count gate is load-bearing: the line vector needs one contiguous
+  `lineCount * sizeof(std::string)` block, and under `-fno-exceptions` a failed
+  allocation aborts the firmware rather than returning null. Larger files stay
+  readable through the streaming reader.
+- Unsaved work survives sleep: `onExit()` writes the buffer back unless the user
+  chose *Discard*. `preventAutoSleep()` alone is not enough — it is only consulted
+  on the *current* activity, so it does not fire while the line editor is on top.
+- Known limitation: editing a line containing non-ASCII through the on-screen
+  keyboard can corrupt it (`KeyboardEntryActivity` is byte-oriented and predates
+  this work). The BLE typing path is UTF-8-aware throughout.
+- Note: upstream `SCOPE.md` explicitly excludes notepads/typed notes — this
+  feature is deliberately fork-local and not intended for an upstream PR.
+
 ## Code changes
 
 New files:

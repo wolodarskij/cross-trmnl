@@ -1,5 +1,7 @@
 #include "OtaUpdateActivity.h"
 
+#include "BleInput.h"
+
 #include <GfxRenderer.h>
 #include <I18n.h>
 #include <WiFi.h>
@@ -56,6 +58,9 @@ void OtaUpdateActivity::onEnter() {
 
   // Turn on WiFi immediately
   LOG_DBG("OTA", "Turning on WiFi...");
+  // Free the BLE stack BEFORE bringing WiFi up (shared C3 radio + WiFi driver
+  // sizes its buffer pools at init — see WifiSelectionActivity). No-op when off.
+  bleinput::stop();
   WiFi.mode(WIFI_STA);
 
   // Launch WiFi selection subactivity

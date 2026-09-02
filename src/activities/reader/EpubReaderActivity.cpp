@@ -17,6 +17,7 @@
 #include <iterator>
 #include <limits>
 
+#include "BleInput.h"
 #include "BookmarkEntry.h"
 #include "CrossPointSettings.h"
 #include "CrossPointState.h"
@@ -264,6 +265,13 @@ void EpubReaderActivity::loop() {
     return;
   }
 
+  // Note: no BLE status-bar repaint here. Painting the status band from loop()
+  // would drive the panel from the main task guarded only by a check-then-act
+  // RenderLock::peek(), and renderStatusBar() draws over the band without
+  // clearing it (so the title doubles and the icon never erases). main.cpp
+  // already calls activityManager.requestUpdate() on every BLE connect/disconnect
+  // edge, which repaints the whole page correctly on the render task.
+
   // Lazily resume a partial's extension build once the reader nears its watermark. Far from
   // it the rebuild is all cost (whole-chapter re-layout from page 0) and no benefit this
   // session, so reopening a partial deliberately does NOT start it (see the deferral in
@@ -300,6 +308,16 @@ void EpubReaderActivity::loop() {
   // watermark re-parses the whole chapter synchronously. Keep ticking until it finalizes.
   if (section && section->isBuilding() && !RenderLock::peek() &&
       (section->isPartial() || static_cast<int>(section->pageCount) < section->currentPage + BUILD_WINDOW_AHEAD)) {
+    // If the BLE stack is what's squeezing the heap below the parse floors, shed it —
+    // builds and resident BLE don't coexist (upstream field crash: a tick's parse
+    // allocation aborted at maxAlloc ~11 KB with BLE resident). The main-loop
+    // lifecycle restarts BLE behind its start floor once the heap recovers.
+    if (BleHid.isRunning() && (ESP.getFreeHeap() < BUILD_TICK_MIN_FREE_HEAP ||
+                               ESP.getMaxAllocHeap() < BUILD_TICK_MIN_MAX_ALLOC)) {
+      LOG_INF("ERS", "Background build needs heap (free=%u maxAlloc=%u); freeing BLE RAM",
+              (unsigned)ESP.getFreeHeap(), (unsigned)ESP.getMaxAllocHeap());
+      bleinput::stop();
+    }
     RenderLock lock;
     // Re-check under the lock: render() (which also holds the RenderLock) may have finalized the
     // build between the outer isBuilding() check and acquiring the lock here, in which case
@@ -1544,7 +1562,7 @@ void EpubReaderActivity::renderStatusBar() const {
   }
 
   GUI.drawStatusBar(renderer, bookProgress, currentPage, pageCount, title, 0, textYOffset, true, currentPageBookmarked,
-                    section->isBuilding());
+                    section->isBuilding(), BleHid.isConnected());
 }
 
 void EpubReaderActivity::navigateToHref(const std::string& hrefStr, const bool savePosition) {

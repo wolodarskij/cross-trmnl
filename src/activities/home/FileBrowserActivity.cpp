@@ -52,6 +52,11 @@ void FileBrowserActivity::loadFiles() {
         if (FsHelpers::checkFileExtension(filename, ".bin")) {
           files.emplace_back(filename);
         }
+      } else if (mode == Mode::PickText) {
+        // Text-editor picker: only editable text files.
+        if (FsHelpers::hasTxtExtension(filename) || FsHelpers::hasMarkdownExtension(filename)) {
+          files.emplace_back(filename);
+        }
       } else if (FsHelpers::hasEpubExtension(filename) || FsHelpers::hasXtcExtension(filename) ||
                  FsHelpers::hasTxtExtension(filename) || FsHelpers::hasMarkdownExtension(filename) ||
                  FsHelpers::hasBmpExtension(filename)) {
@@ -61,6 +66,10 @@ void FileBrowserActivity::loadFiles() {
   }
   root.close();
   FsHelpers::sortFileList(files);
+  if (mode == Mode::PickText) {
+    // Synthetic first row: create a new text file in the directory being viewed.
+    files.insert(files.begin(), tr(STR_NEW_TEXT_FILE));
+  }
 }
 
 void FileBrowserActivity::onEnter() {
@@ -216,8 +225,20 @@ void FileBrowserActivity::loop() {
     const std::string& entry = files[selectorIndex];
     bool isDirectory = (entry.back() == '/');
 
-    // Firmware picker: select file -> return path; navigate into directories normally.
-    if (mode == Mode::PickFirmware && !isDirectory) {
+    // Text picker: the synthetic "+ New text file" first row returns the current
+    // DIRECTORY (trailing '/') so the caller prompts for a name and creates the file.
+    if (mode == Mode::PickText && selectorIndex == 0) {
+      std::string cleanBasePath = basepath;
+      if (cleanBasePath.back() != '/') cleanBasePath += "/";
+      ActivityResult res{FilePathResult{cleanBasePath}};
+      res.isCancelled = false;
+      setResult(std::move(res));
+      finish();
+      return;
+    }
+
+    // Picker modes: select file -> return path; navigate into directories normally.
+    if ((mode == Mode::PickFirmware || mode == Mode::PickText) && !isDirectory) {
       std::string cleanBasePath = basepath;
       if (cleanBasePath.back() != '/') cleanBasePath += "/";
       ActivityResult res{FilePathResult{cleanBasePath + entry}};
@@ -290,8 +311,8 @@ void FileBrowserActivity::loop() {
         selectorIndex = findEntry(dirName);
 
         requestUpdate();
-      } else if (mode == Mode::PickFirmware) {
-        // Firmware picker at root: cancel back to caller instead of going home.
+      } else if (mode != Mode::Books) {
+        // Picker at root: cancel back to caller instead of going home.
         ActivityResult res;
         res.isCancelled = true;
         setResult(std::move(res));
@@ -341,6 +362,9 @@ std::string getFileExtension(const std::string& filename) {
     return "";
   }
   const auto pos = filename.rfind('.');
+  if (pos == std::string::npos) {
+    return "";  // synthetic rows (e.g. the text picker's "+ New text file") have no extension
+  }
   return filename.substr(pos);
 }
 
@@ -352,8 +376,9 @@ void FileBrowserActivity::render(RenderLock&&) {
   const auto& metrics = UITheme::getInstance().getMetrics();
 
   std::string folderName =
-      (mode == Mode::PickFirmware)
-          ? std::string(tr(STR_SELECT_FIRMWARE_FILE))
+      (mode == Mode::PickFirmware) ? std::string(tr(STR_SELECT_FIRMWARE_FILE))
+      : (mode == Mode::PickText)
+          ? std::string(tr(STR_SELECT_TEXT_FILE))
           : ((basepath == "/") ? std::string(tr(STR_SD_CARD)) : basepath.substr(basepath.rfind('/') + 1));
   GUI.drawHeader(renderer, Rect{0, metrics.topPadding, pageWidth, metrics.headerHeight}, folderName.c_str());
 
@@ -402,10 +427,10 @@ void FileBrowserActivity::render(RenderLock&&) {
 
   // Help text
   const char* backLabel = (basepath == "/") ? (mode == Mode::PickFirmware ? tr(STR_BACK) : tr(STR_HOME)) : tr(STR_BACK);
-  // In PickFirmware mode, Confirm on a .bin returns the path to the caller (not "open"); show
+  // In picker modes, Confirm on a file returns the path to the caller (not "open"); show
   // STR_SELECT instead. Directories in the same picker still descend, so keep STR_OPEN there.
-  const bool selectingFirmwareFile = mode == Mode::PickFirmware && !files.empty() && files[selectorIndex].back() != '/';
-  const char* confirmLabel = files.empty() ? "" : (selectingFirmwareFile ? tr(STR_SELECT) : tr(STR_OPEN));
+  const bool selectingPickedFile = mode != Mode::Books && !files.empty() && files[selectorIndex].back() != '/';
+  const char* confirmLabel = files.empty() ? "" : (selectingPickedFile ? tr(STR_SELECT) : tr(STR_OPEN));
   const auto labels = mappedInput.mapLabels(backLabel, confirmLabel, files.empty() ? "" : tr(STR_DIR_UP),
                                             files.empty() ? "" : tr(STR_DIR_DOWN));
   GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
