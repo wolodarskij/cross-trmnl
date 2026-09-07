@@ -78,8 +78,13 @@ void SleepActivity::renderDashboardSleepScreen(bool autoUpdate) const {
     DashboardImage::fetchToCache();
   }
 
+  // Resolved rather than hardcoded to kCachePath: with a screen set the image
+  // is the user's selected screen in /dashboards, and the fetch above may
+  // have just replaced that file rather than the legacy cache slot.
+  const std::string imagePath = DashboardImage::currentImagePath();
+
   HalFile file;
-  if (Storage.openFileForRead("SLP", DashboardImage::kCachePath, file)) {
+  if (!imagePath.empty() && Storage.openFileForRead("SLP", imagePath, file)) {
     Bitmap bitmap(file, true);
     if (bitmap.parseHeaders() == BmpReaderError::Ok) {
       LOG_DBG("SLP", "Rendering dashboard sleep screen");

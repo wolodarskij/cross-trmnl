@@ -25,6 +25,11 @@ class CrossPointState {
   // Not persisted: set by enterDeepSleep() when the dashboard activity is on
   // screen, read by SleepActivity to keep the dashboard visible during sleep.
   bool sleepingFromDashboard = false;
+  // Which screen in /dashboards the user last selected (DashboardSet id, no
+  // extension). State rather than a setting: the user picks it by pressing
+  // Left/Right on the dashboard, never from the settings menu. Empty means
+  // "no pick yet" - the dashboard then shows the first screen it finds.
+  std::string dashboardScreenId;
 
   // Returns true if idx was shown within the last checkCount picks.
   // Walks backwards from the most recently written slot.

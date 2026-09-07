@@ -183,9 +183,20 @@ class CrossPointSettings {
     QUICK_RESUME_SLEEP_SCREEN_COUNT
   };
 
-  // Where the dashboard image comes from: a plain BMP URL ("simple") or a
-  // TRMNL-compatible server (self-hosted BYOS) speaking /api/setup + /api/display.
-  enum DASHBOARD_SOURCE { DASHBOARD_SOURCE_SIMPLE = 0, DASHBOARD_SOURCE_TRMNL = 1, DASHBOARD_SOURCE_COUNT };
+  // Where dashboard images come from: a plain BMP URL ("simple"), a
+  // TRMNL-compatible server (self-hosted BYOS) speaking /api/setup +
+  // /api/display, or a screen set that serves many BMPs at once (see
+  // DashboardSet). The first two fetch one image into a single cache slot;
+  // the screen set fills /dashboards and the user picks from it.
+  //
+  // Existing values must keep their numbers - they are persisted as-is, so
+  // SCREENSET goes on the end rather than anywhere more logical.
+  enum DASHBOARD_SOURCE {
+    DASHBOARD_SOURCE_SIMPLE = 0,
+    DASHBOARD_SOURCE_TRMNL = 1,
+    DASHBOARD_SOURCE_SCREENSET = 2,
+    DASHBOARD_SOURCE_COUNT
+  };
 
   // Sleep screen settings
   uint8_t sleepScreen = DARK;
@@ -286,6 +297,12 @@ class CrossPointSettings {
   // An empty key triggers auto-provisioning via GET /api/setup on first fetch.
   char trmnlUrl[96] = "";
   char trmnlApiKey[48] = "";
+  // Screen-set server base URL (e.g. http://192.168.178.20:8080). The server
+  // root, not a file: DashboardSet appends /screens.json and the per-screen
+  // paths the manifest names. Only used when dashboardSource == SCREENSET,
+  // and only when the user asks for a sync - the dashboard itself reads the
+  // SD card, so this can stay empty on a device that never syncs.
+  char dashboardSetUrl[128] = "";
   // Show hidden files/directories (starting with '.') in the file browser (0 = hidden, 1 = show)
   uint8_t showHiddenFiles = 0;
   // Remove a book from the Recent Books list when its End-of-Book screen is reached (0 = off, 1 = on)

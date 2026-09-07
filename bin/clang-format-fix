@@ -1,11 +1,43 @@
 #!/usr/bin/env bash
 
-# Check if clang-format is available and pick the preferred binary.
-if command -v clang-format-21 >/dev/null 2>&1; then
-  CLANG_FORMAT_BIN="clang-format-21"
-elif command -v clang-format >/dev/null 2>&1; then
-  CLANG_FORMAT_BIN="clang-format"
-else
+# Locate a usable clang-format binary.
+#
+# On Windows this script may be run from Git Bash, MSYS or WSL (git clients
+# resolve `env bash` differently, and System32\bash.exe launches WSL). WSL
+# distros usually have no clang-format of their own, so fall back to a
+# Windows-side install, reachable as /c/... from Git Bash and /mnt/c/... from
+# WSL. Relative paths still work because the Windows binary inherits the
+# translated working directory.
+find_clang_format() {
+  local candidate
+  for candidate in clang-format-21 clang-format; do
+    if command -v "${candidate}" >/dev/null 2>&1; then
+      printf '%s\n' "${candidate}"
+      return 0
+    fi
+  done
+
+  local root
+  for root in /c /mnt/c; do
+    [ -d "${root}" ] || continue
+    # Prefer a real LLVM install over pip console-script shims: the shims
+    # re-launch a Windows python and do not resolve correctly from WSL.
+    for candidate in \
+        "${root}/Program Files/LLVM/bin/clang-format.exe" \
+        "${root}/Program Files (x86)/LLVM/bin/clang-format.exe" \
+        "${root}"/Users/*/AppData/Roaming/Python/Python*/Scripts/clang-format.exe \
+        "${root}"/Users/*/AppData/Local/Programs/Python/Python*/Scripts/clang-format.exe; do
+      if [ -x "${candidate}" ]; then
+        printf '%s\n' "${candidate}"
+        return 0
+      fi
+    done
+  done
+
+  return 1
+}
+
+if ! CLANG_FORMAT_BIN="$(find_clang_format)"; then
   printf "'clang-format' not found in current environment\n"
   printf "Install clang-format-21 (recommended), clang, clang-tools, or clang-format depending on your distro/os and tooling requirements\n"
   exit 1
@@ -19,7 +51,7 @@ if [[ "${1:-}" == "-g" ]]; then
   GIT_LS_FILES_FLAGS="--modified"
 fi
 
-CLANG_FORMAT_VERSION_RAW="$(${CLANG_FORMAT_BIN} --version)"
+CLANG_FORMAT_VERSION_RAW="$("${CLANG_FORMAT_BIN}" --version)"
 CLANG_FORMAT_MAJOR="$(printf '%s\n' "${CLANG_FORMAT_VERSION_RAW}" | grep -oE '[0-9]+' | head -n1)"
 
 # Guard against local binaries older than the repo formatting config.

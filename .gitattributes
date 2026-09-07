@@ -1,0 +1,5 @@
+# Shell scripts must keep LF endings: they are executed by bash (WSL/Git Bash),
+# which treats a trailing CR as part of the command and fails to parse them.
+.githooks/** text eol=lf
+bin/clang-format-fix text eol=lf
+*.sh text eol=lf

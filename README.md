@@ -2,9 +2,11 @@
 
 **A [CrossPoint Reader](https://github.com/crosspoint-reader/crosspoint-reader) fork that turns the Xteink X4 into a TRMNL-style e-ink dashboard — while staying a full e-book reader.**
 
-The device fetches a full-screen image over WiFi and shows it on demand or as
-the sleep screen, so every time you put the reader down it becomes an
-always-on display for weather, calendar, or anything else you render.
+The device keeps a set of full-screen images on its SD card and shows them on
+demand or as the sleep screen, so every time you put the reader down it
+becomes an always-on display for weather, calendar, or anything else you
+render. Download them over WiFi, or just copy BMPs onto the card — the
+dashboard works with no server at all.
 
 This README covers only what this fork adds. Everything else — the reader
 engine, install tooling, custom fonts, internals, and community — comes from
@@ -14,15 +16,21 @@ CrossPoint README, preserved verbatim).
 
 ## What this fork adds
 
-- **Dashboard viewer** on the home menu — fetch and show the configured image
-  full-screen (Confirm = refresh, Back = exit).
-- **Dashboard sleep-screen modes** — *Dashboard* (cached image, instant sleep)
-  and *Dashboard + Auto-update* (fresh fetch on every sleep).
-- **Two image sources** (Settings → Display → Dashboard source):
-  - *Simple* — a plain BMP URL, designed for the companion
-    [x4-dashboard-server](https://github.com/wolodarskij/x4-dashboard-server)
-    (browser widget editor: text, images, weather, ICS calendar; 1-bit or
-    native 4-level grayscale output).
+- **Multi-screen dashboard** on the home menu — opens instantly on the images
+  already on the card, with **no network access at all**. Left/Right switch
+  screens, Confirm connects and downloads them, Back exits.
+- **Works without a server** — drop 480×800 BMPs into `/dashboards` on the SD
+  card and they show up alongside anything downloaded. Syncing only ever adds
+  files; it never deletes what you put there.
+- **Dashboard sleep-screen modes** — *Dashboard* (selected screen, instant
+  sleep) and *Dashboard + Auto-update* (refreshes just that screen on every
+  sleep).
+- **Three image sources** (Settings → Display → Dashboard source):
+  - *Screen set* — many screens from one server, via
+    [x4-dashboard-server](https://github.com/wolodarskij/x4-dashboard-server)'s
+    `screens.json` manifest.
+  - *Simple* — a single plain BMP URL from the same server (also the
+    compatibility path for older setups).
   - *TRMNL* — self-hosted [TRMNL BYOS](https://docs.usetrmnl.com/go) servers
     (tested with [byos_fastapi](https://github.com/usetrmnl/byos_fastapi)):
     auto-provisioning via `/api/setup`, image fetch via `/api/display`,
@@ -85,15 +93,23 @@ serial logging), which apply here unchanged.
 
 ## Using it
 
-1. Settings → Display → **Dashboard source** → Simple or TRMNL.
-2. Set **Dashboard URL** (Simple) or **TRMNL server URL** (TRMNL).
-3. Home → **Dashboard** to fetch and view.
+1. Settings → Display → **Dashboard source** → Screen set, Simple or TRMNL.
+2. Set the matching address: **Dashboard server URL** (Screen set),
+   **Dashboard URL** (Simple), or **TRMNL server URL** (TRMNL).
+3. Home → **Dashboard**, then **Confirm** to download. From then on it opens
+   offline; **Left/Right** switch between screens.
 4. Settings → Display → **Sleep Screen** → *Dashboard* or
-   *Dashboard + Auto-update* to make it the screensaver.
+   *Dashboard + Auto-update* to make the selected screen the screensaver.
 
-For the Simple source, run the companion
+Run the companion
 [x4-dashboard-server](https://github.com/wolodarskij/x4-dashboard-server) and
-point the Dashboard URL at `http://<pc-ip>:8080/dashboard.bmp`.
+point **Dashboard server URL** at `http://<pc-ip>:8080` (the root — the device
+appends `/screens.json` itself). For the older Simple source, point
+**Dashboard URL** at `http://<pc-ip>:8080/dashboard.bmp` instead.
+
+**No server at all:** copy 480×800 BMPs into a `/dashboards` folder on the SD
+card and go straight to step 3. One file per screen; the filename is the name
+you will see.
 
 ## Credits
 
