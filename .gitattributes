@@ -3,3 +3,7 @@
 .githooks/** text eol=lf
 bin/clang-format-fix text eol=lf
 *.sh text eol=lf
+
+# Windows batch files are CRLF; keep autocrlf from turning them into
+# spurious whole-file conflicts.
+*.bat text eol=crlf

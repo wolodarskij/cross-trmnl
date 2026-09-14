@@ -2,6 +2,25 @@
 
 set -euo pipefail
 
+# Some Windows git clients resolve the shebang above to
+# C:\Windows\System32\bash.exe, which runs this hook inside WSL. WSL's git
+# reads /mnt/<drive> stat data that never matches the index written by Git
+# for Windows, so every tracked file looks modified and the formatter below
+# rewrites the entire repository. Hand off to Git Bash when that happens.
+# No-op on Linux/macOS, and on WSL clones that live on the WSL filesystem.
+if [ -z "${CLANG_FORMAT_HOOK_REEXEC:-}" ] && grep -qi microsoft /proc/version 2>/dev/null; then
+  case "$(pwd -P)" in
+    /mnt/?/*)
+      git_bash="/mnt/c/Program Files/Git/bin/bash.exe"
+      if [ -x "${git_bash}" ]; then
+        export CLANG_FORMAT_HOOK_REEXEC=1
+        cd "$(git rev-parse --show-toplevel)"
+        exec "${git_bash}" .githooks/pre-commit "$@"
+      fi
+      ;;
+  esac
+fi
+
 # Run formatter from repository root regardless of current directory.
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 cd "${REPO_ROOT}"
@@ -16,7 +35,7 @@ done < <(git diff --cached --name-only -z --diff-filter=ACMR)
 # Intentionally format all currently modified tracked C/C++ files.
 # The helper handles no-op cases and exits 0 when nothing matches.
 echo "Running clang-format fix before commit..."
-./bin/clang-format-fix
+./bin/clang-format-fix -g
 
 # Ensure formatting changes are included in the pending commit without
 # staging unrelated tracked modifications from other files in the

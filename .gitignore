@@ -29,3 +29,12 @@ tools/luac/bin/
 # (worktrees, scheduled-task locks, settings.local, scout CLEANUP.md) out.
 .claude/*
 !.claude/skills/
+# ESP-IDF Component Manager downloads; restored by the build from the
+# component manifests, never edited by hand.
+managed_components/
+# arduino-lib-builder scratch dir.
+.dummy/
+# Generated sdkconfig dumps (the build writes these; none are tracked).
+sdkconfig
+sdkconfig.default
+sdkconfig.defaults
