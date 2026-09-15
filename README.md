@@ -42,6 +42,12 @@ CrossPoint README, preserved verbatim).
   draw, read buttons, read/write files, and fetch over WiFi; Back aborts any
   script, memory is capped, and errors are caught. See
   [docs/SCRIPTING.md](./docs/SCRIPTING.md).
+- **Bluetooth keyboards & page-turner remotes** — pair BLE HID devices
+  (Settings → Controls → Bluetooth), turn pages from a remote, navigate every
+  menu and type into every text field from a real keyboard.
+- **Text editor** on the home menu — browse, create, and edit `.txt`/`.md`
+  notes on the SD card with the on-screen keyboard or a connected BLE
+  keyboard.
 
 **The complete change list vs. upstream is in [FEATURES.md](./FEATURES.md).**
 
@@ -110,6 +116,39 @@ appends `/screens.json` itself). For the older Simple source, point
 **No server at all:** copy 480×800 BMPs into a `/dashboards` folder on the SD
 card and go straight to step 3. One file per screen; the filename is the name
 you will see.
+
+### Bluetooth keyboard / remote
+
+1. Settings → Controls → **Bluetooth** → toggle Bluetooth on → **Scan & Pair**
+   and select your device (bonds persist; it auto-reconnects afterwards).
+2. A keyboard works immediately: arrows/Enter/Escape navigate menus,
+   PageUp/PageDown turn pages, and typing goes into whatever text field is
+   open (WiFi passwords, search, settings, the text editor). Remotes map
+   their buttons via **Map Remote Buttons**.
+3. While reading, toggle Bluetooth from the reader menu; a status-bar icon
+   shows when a device is connected.
+
+Notes: BLE only — the ESP32-C3 has no Bluetooth Classic, so Classic-only
+devices can't connect. Bluetooth is suspended whenever WiFi is in use (one
+radio, and the two stacks don't fit in RAM together) and while it is off it
+costs zero heap.
+
+### Text editor
+
+Home → **Text editor** → pick a `.txt`/`.md` file or **+ New text file**.
+Up/Down select a line, **Confirm** edits it with the on-screen keyboard,
+**long-Confirm** opens options (insert/delete line, save, save & exit), and
+**Back** prompts before discarding unsaved changes. With a BLE keyboard you
+just type: Enter splits lines, Backspace joins them, **Ctrl+S** saves,
+**Escape** exits.
+
+Saves are crash-safe (temp file + rename), and unsaved work is written back
+automatically if the device sleeps while the editor is open — only an explicit
+*Discard* throws edits away. Limits: files up to **32 KB** and **1200 lines**
+open in the editor (the whole document is held in RAM); anything larger stays
+readable in the normal reader. Editing a line that contains non-ASCII text via
+the *on-screen* keyboard can mangle it — that keyboard is byte-oriented and
+predates this feature; the BLE keyboard path is UTF-8-safe.
 
 ## Credits
 

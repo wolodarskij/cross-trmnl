@@ -31,5 +31,10 @@ class ReaderActivity final : public Activity {
   explicit ReaderActivity(GfxRenderer& renderer, MappedInputManager& mappedInput, std::string initialBookPath)
       : Activity("Reader", renderer, mappedInput), initialBookPath(std::move(initialBookPath)) {}
   void onEnter() override;
-  bool isReaderActivity() const override { return true; }
+  // This shell only dispatches to the concrete readers (which return true) — it is a
+  // loading trampoline, not a reading surface, so it must not claim reader status.
+  bool isReaderActivity() const override { return false; }
+  // Book loading is the heap-heaviest phase of the whole firmware; hold the BLE stack
+  // (~52 KB) off until the concrete reader has taken over.
+  bool deferBluetoothStart() const override { return true; }
 };

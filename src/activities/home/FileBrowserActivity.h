@@ -11,8 +11,11 @@
 
 class FileBrowserActivity final : public Activity {
  public:
-  // Books = standard reader browser; PickFirmware = filter to .bin only and return path via ActivityResult.
-  enum class Mode { Books, PickFirmware };
+  // Books = standard reader browser; PickFirmware = filter to .bin only and return path via
+  // ActivityResult; PickText = filter to .txt/.md for the text editor, with a synthetic
+  // "+ New text file" first row that returns the current DIRECTORY path (trailing '/') —
+  // unambiguous, since selecting a real file always returns a file path.
+  enum class Mode { Books, PickFirmware, PickText };
 
  private:
   // Deletion

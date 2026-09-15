@@ -45,6 +45,8 @@ class HomeActivity final : public Activity {
     ++i;
     if (item == HomeMenuItem::SCRIPTS) return i;
     ++i;
+    if (item == HomeMenuItem::TEXT_EDITOR) return i;
+    ++i;
     if (item == HomeMenuItem::SETTINGS_MENU) return i;
     return 0;
   }
@@ -58,6 +60,7 @@ class HomeActivity final : public Activity {
     if (idx == i++) return HomeMenuItem::FILE_TRANSFER;
     if (idx == i++) return HomeMenuItem::DASHBOARD;
     if (idx == i++) return HomeMenuItem::SCRIPTS;
+    if (idx == i++) return HomeMenuItem::TEXT_EDITOR;
     if (idx == i) return HomeMenuItem::SETTINGS_MENU;
     return HomeMenuItem::NONE;
   }
@@ -69,6 +72,7 @@ class HomeActivity final : public Activity {
   void onOpdsBrowserOpen();
   void onDashboardOpen();
   void onScriptsOpen();
+  void onTextEditorOpen();
 
   int getMenuItemCount() const;
   bool storeCoverBuffer();    // Store frame buffer for cover image

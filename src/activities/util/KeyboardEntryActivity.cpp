@@ -29,10 +29,15 @@ void KeyboardEntryActivity::onEnter() {
   rightLongHandled = false;
   savedCursorPos = 0;
   rightStartCursorPos = 0;
+  // Route BLE keyboard keys into this field instead of the logical-button overlay.
+  mappedInput.setBleTextSink(true);
   requestUpdate();
 }
 
-void KeyboardEntryActivity::onExit() { Activity::onExit(); }
+void KeyboardEntryActivity::onExit() {
+  mappedInput.setBleTextSink(false);
+  Activity::onExit();
+}
 
 int KeyboardEntryActivity::getContentRowCount() const {
   if (urlMode) return 3;
@@ -178,6 +183,71 @@ bool KeyboardEntryActivity::handleKeyPress() {
   return insertChar(getSelectedChar());
 }
 
+bool KeyboardEntryActivity::drainBleKeys() {
+  freeink::KeyEvent ev;
+  bool changed = false;
+  while (mappedInput.popBleTextKey(ev)) {
+    // A printable arriving with Ctrl/Alt/GUI held is a shortcut chord, not text;
+    // typing its letter into the field would be wrong (Ctrl+A must not insert 'a').
+    // 0xDD = both Ctrl, both Alt, both GUI — Shift is deliberately excluded.
+    if (ev.ch != 0 && (ev.mods & 0xDD) != 0) continue;
+    if (ev.ch != 0) {
+      insertChar(ev.ch);
+      changed = true;
+      continue;
+    }
+    switch (ev.special) {
+      case freeink::SpecialKey::Backspace:
+        if (cursorPos > 0 && !text.empty()) {
+          text.erase(cursorPos - 1, 1);
+          cursorPos--;
+          changed = true;
+        }
+        break;
+      case freeink::SpecialKey::Delete:
+        if (cursorPos < text.length()) {
+          text.erase(cursorPos, 1);
+          changed = true;
+        }
+        break;
+      case freeink::SpecialKey::Enter:
+        onComplete(text);
+        return false;
+      case freeink::SpecialKey::Escape:
+        onCancel();
+        return false;
+      // Arrows/Home/End move the caret and surface it (cursorMode), mirroring the
+      // long-press-Up entry into cursor mode on the on-screen keyboard.
+      case freeink::SpecialKey::Left:
+        if (cursorPos > 0) cursorPos--;
+        cursorMode = true;
+        changed = true;
+        break;
+      case freeink::SpecialKey::Right:
+        if (cursorPos < text.length()) cursorPos++;
+        cursorMode = true;
+        changed = true;
+        break;
+      case freeink::SpecialKey::Home:
+        cursorPos = 0;
+        cursorMode = true;
+        changed = true;
+        break;
+      case freeink::SpecialKey::End:
+        cursorPos = text.length();
+        cursorMode = true;
+        changed = true;
+        break;
+      default:
+        break;
+    }
+  }
+  // One repaint per drained batch: burst typing latches in the 16-deep rings and
+  // lands in a single e-ink refresh instead of one per keystroke.
+  if (changed) requestUpdate();
+  return true;
+}
+
 void KeyboardEntryActivity::mapColContentBottom(int& col, bool goingUp) const {
   if (urlMode) {
     col = goingUp ? col - 1 : col + 1;
@@ -189,6 +259,10 @@ void KeyboardEntryActivity::mapColContentBottom(int& col, bool goingUp) const {
 }
 
 void KeyboardEntryActivity::loop() {
+  // BLE keyboard input first: a drained Enter/Escape finishes the activity, in
+  // which case the on-screen keyboard must not also process this frame.
+  if (!drainBleKeys()) return;
+
   const int totalRows = getTotalRowCount();
 
   if (!cursorMode && mappedInput.wasPressed(MappedInputManager::Button::Up)) {

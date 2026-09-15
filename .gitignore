@@ -29,12 +29,12 @@ tools/luac/bin/
 # (worktrees, scheduled-task locks, settings.local, scout CLEANUP.md) out.
 .claude/*
 !.claude/skills/
+# pioarduino custom_sdkconfig scaffold: generated on every core rebuild (see
+# the NimBLE trims in platformio.ini); never source, safe to delete.
+.dummy/
 # ESP-IDF Component Manager downloads; restored by the build from the
 # component manifests, never edited by hand.
 managed_components/
-# arduino-lib-builder scratch dir.
-.dummy/
-# Generated sdkconfig dumps (the build writes these; none are tracked).
-sdkconfig
-sdkconfig.default
-sdkconfig.defaults
+/sdkconfig
+/sdkconfig.*
+/CMakeLists.txt

@@ -17,11 +17,13 @@
 #include "MappedInputManager.h"
 #include "OpdsServerStore.h"
 #include "RecentBooksStore.h"
+#include "activities/editor/TextEditorActivity.h"
+#include "activities/util/KeyboardEntryActivity.h"
 #include "components/UITheme.h"
 #include "fontIds.h"
 
 int HomeActivity::getMenuItemCount() const {
-  int count = 6;  // File Browser, Recents, File transfer, Dashboard, Scripts, Settings
+  int count = 7;  // File Browser, Recents, File transfer, Dashboard, Scripts, Text editor, Settings
   if (!recentBooks.empty()) {
     count += recentBooks.size();
   }
@@ -203,6 +205,9 @@ void HomeActivity::loop() {
         case HomeMenuItem::SCRIPTS:
           onScriptsOpen();
           break;
+        case HomeMenuItem::TEXT_EDITOR:
+          onTextEditorOpen();
+          break;
         case HomeMenuItem::SETTINGS_MENU:
           onSettingsOpen();
           break;
@@ -238,8 +243,10 @@ void HomeActivity::render(RenderLock&&) {
 
   // Build menu items dynamically
   std::vector<const char*> menuItems = {tr(STR_BROWSE_FILES), tr(STR_MENU_RECENT_BOOKS), tr(STR_FILE_TRANSFER),
-                                        tr(STR_DASHBOARD), tr(STR_SCRIPTS), tr(STR_SETTINGS_TITLE)};
-  std::vector<UIIcon> menuIcons = {Folder, Recent, Transfer, Dashboard, Script, Settings};
+                                        tr(STR_DASHBOARD),    tr(STR_SCRIPTS),
+                                        tr(STR_TEXT_EDITOR),  tr(STR_SETTINGS_TITLE)};
+  // Must stay index-aligned with menuItems above: drawButtonMenu indexes both by row.
+  std::vector<UIIcon> menuIcons = {Folder, Recent, Transfer, Dashboard, Script, Text, Settings};
 
   if (hasOpdsServers) {
     menuItems.insert(menuItems.begin() + 2, tr(STR_OPDS_BROWSER));
@@ -281,6 +288,47 @@ void HomeActivity::onSelectBook(const std::string& path) { activityManager.goToR
 void HomeActivity::onFileBrowserOpen() { activityManager.goToFileBrowser(); }
 
 void HomeActivity::onRecentsOpen() { activityManager.goToRecentBooks(); }
+
+void HomeActivity::onTextEditorOpen() {
+  // Pick a .txt/.md (or the "+ New text file" row, which returns the directory
+  // with a trailing '/'), then open the editor. A new file gets its name from
+  // the on-screen keyboard and is created on the editor's first save.
+  startActivityForResult(
+      std::make_unique<FileBrowserActivity>(renderer, mappedInput, "/", FileBrowserActivity::Mode::PickText),
+      [this](const ActivityResult& result) {
+        if (result.isCancelled) {
+          requestUpdate();
+          return;
+        }
+        const std::string path = std::get<FilePathResult>(result.data).path;
+        if (!path.empty() && path.back() == '/') {
+          startActivityForResult(
+              std::make_unique<KeyboardEntryActivity>(renderer, mappedInput, tr(STR_FILE_NAME), "", 64),
+              [this, path](const ActivityResult& nameResult) {
+                if (nameResult.isCancelled) {
+                  requestUpdate();
+                  return;
+                }
+                char sanitized[128];
+                FsHelpers::sanitizePathComponentForFat32(std::get<KeyboardResult>(nameResult.data).text.c_str(),
+                                                         sanitized, sizeof(sanitized));
+                std::string name{sanitized};
+                if (name.empty()) {
+                  requestUpdate();
+                  return;
+                }
+                if (!FsHelpers::hasTxtExtension(name) && !FsHelpers::hasMarkdownExtension(name)) {
+                  name += ".txt";
+                }
+                startActivityForResult(std::make_unique<TextEditorActivity>(renderer, mappedInput, path + name),
+                                       [this](const ActivityResult&) { requestUpdate(); });
+              });
+          return;
+        }
+        startActivityForResult(std::make_unique<TextEditorActivity>(renderer, mappedInput, path),
+                               [this](const ActivityResult&) { requestUpdate(); });
+      });
+}
 
 void HomeActivity::onSettingsOpen() { activityManager.goToSettings(); }
 
