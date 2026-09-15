@@ -20,7 +20,7 @@ class RenderLock;  // forward declaration
 enum class HomeMenuItem {
   NONE,
   FILE_BROWSER,
-  RECENTS,
+  LIBRARY,
   OPDS_BROWSER,
   FILE_TRANSFER,
   DASHBOARD,
@@ -92,18 +92,19 @@ class ActivityManager {
 
   // goTo... functions are convenient wrapper for replaceActivity()
   void goToFileTransfer();
+  void goToUsbDrive();
   void goToSettings();
   void goToDashboard();
   void goToScripts();
   void goToFileBrowser(std::string path = {});
-  void goToRecentBooks();
+  void goToLibrary();
   void goToBrowser();
-  void goToReader(std::string path);
+  void goToReader(std::string path, bool allowFastInitialRefresh = false);
   void goToSleep(bool fromTimeout = false);
   void goToBoot();
   void goToFullScreenMessage(std::string message, EpdFontFamily::Style style = EpdFontFamily::REGULAR);
   void goToCrashReport();
-  void goHome(HomeMenuItem initialMenuItem = HomeMenuItem::NONE);
+  void goHome(HomeMenuItem initialMenuItem = HomeMenuItem::NONE, bool cleanInitialRefresh = false);
 
   // This will move current activity to stack instead of deleting it
   void pushActivity(std::unique_ptr<Activity>&& activity);
@@ -113,6 +114,7 @@ class ActivityManager {
   void popActivity();
 
   bool preventAutoSleep() const;
+  bool requiresExclusiveStorageLoop() const;
   bool isReaderActivity() const;
   bool isDashboardActivity() const;
   bool currentKeepsBluetoothAlive() const;
@@ -125,6 +127,7 @@ class ActivityManager {
   // advances — a stack-wide check would hold BLE off for as long as the menu stays
   // open.
   bool bluetoothStartDeferred() const;
+  bool handleForcedRefresh();
   bool skipLoopDelay() const;
   ScreenshotInfo getScreenshotInfo() const;
 

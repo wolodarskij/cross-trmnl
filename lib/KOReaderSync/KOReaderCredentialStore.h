@@ -11,6 +11,12 @@ enum class DocumentMatchMethod : uint8_t {
   BINARY = 1,    // Match by partial MD5 of file content (more accurate, but files must be identical)
 };
 
+// How manual "Sync Progress" resolves differences after fetching remote progress.
+enum class KOReaderSyncBehavior : uint8_t {
+  ASK_EVERY_TIME = 0,  // Preserve legacy behavior: always show Apply/Upload choices.
+  SMART = 1,           // Auto-resolve simple cases using furthest progress.
+};
+
 /**
  * Singleton class for storing KOReader sync credentials on the SD card.
  * Passwords are XOR-obfuscated with the device's unique hardware MAC address
@@ -25,6 +31,7 @@ class KOReaderCredentialStore : public PersistableStore<KOReaderCredentialStore>
   std::string serverUrl;                                            // Custom sync server URL (empty = default)
   DocumentMatchMethod matchMethod = DocumentMatchMethod::FILENAME;  // Default to filename for compatibility
   bool sendMetadata = false;                                        // Send document metadata with progress sync
+  KOReaderSyncBehavior syncBehavior = KOReaderSyncBehavior::SMART;
 
   // Private constructor for singleton
   KOReaderCredentialStore() = default;
@@ -58,6 +65,9 @@ class KOReaderCredentialStore : public PersistableStore<KOReaderCredentialStore>
   // Get base URL for API calls (with http:// normalization if no protocol, falls back to default)
   std::string getBaseUrl() const;
 
+  // Whether API calls target the CrossPoint sync server that supports protocol extensions.
+  bool usesCrossPointSyncServer() const;
+
   // Document matching method
   void setMatchMethod(DocumentMatchMethod method);
   DocumentMatchMethod getMatchMethod() const { return matchMethod; }
@@ -65,6 +75,10 @@ class KOReaderCredentialStore : public PersistableStore<KOReaderCredentialStore>
   // Send metadata setting
   void setSendMetadata(bool enabled);
   bool getSendMetadata() const { return sendMetadata; }
+
+  // Sync behavior
+  void setSyncBehavior(KOReaderSyncBehavior behavior);
+  KOReaderSyncBehavior getSyncBehavior() const { return syncBehavior; }
 };
 
 // Helper macro to access credential store

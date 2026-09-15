@@ -16,21 +16,20 @@ CrossPoint README, preserved verbatim).
 
 ## What this fork adds
 
-- **Multi-screen dashboard** on the home menu — opens instantly on the images
-  already on the card, with **no network access at all**. Left/Right switch
-  screens, Confirm connects and downloads them, Back exits.
+- **Dashboard** on the home menu — opens instantly on the images already on
+  the card, with **no network access at all**. Left/Right switch screens,
+  Confirm connects and downloads them, Back exits.
 - **Works without a server** — drop 480×800 BMPs into `/dashboards` on the SD
   card and they show up alongside anything downloaded. Syncing only ever adds
   files; it never deletes what you put there.
 - **Dashboard sleep-screen modes** — *Dashboard* (selected screen, instant
   sleep) and *Dashboard + Auto-update* (refreshes just that screen on every
   sleep).
-- **Three image sources** (Settings → Display → Dashboard source):
-  - *Screen set* — many screens from one server, via
-    [x4-dashboard-server](https://github.com/wolodarskij/x4-dashboard-server)'s
-    `screens.json` manifest.
-  - *Simple* — a single plain BMP URL from the same server (also the
-    compatibility path for older setups).
+- **Two dashboard sources**, each a build option (see below); with both
+  compiled in, Settings → Display → Dashboard source picks the one to use:
+  - *X4 dashboard server* — the companion
+    [x4-dashboard-server](https://github.com/wolodarskij/x4-dashboard-server).
+    One setting, the server address; the server delivers the screens.
   - *TRMNL* — self-hosted [TRMNL BYOS](https://docs.usetrmnl.com/go) servers
     (tested with [byos_fastapi](https://github.com/usetrmnl/byos_fastapi)):
     auto-provisioning via `/api/setup`, image fetch via `/api/display`,
@@ -118,22 +117,18 @@ serial logging), which apply here unchanged.
 
 ## Using it
 
-1. Settings → Display → **Dashboard source** → Screen set, Simple or TRMNL.
-2. Set the matching address: **Dashboard server URL** (Screen set),
-   **Dashboard URL** (Simple), or **TRMNL server URL** (TRMNL).
-3. Home → **Dashboard**, then **Confirm** to download. From then on it opens
+1. Set the address: **Dashboard server address** for the
+   [x4-dashboard-server](https://github.com/wolodarskij/x4-dashboard-server)
+   (e.g. `192.168.1.20:8080`, scheme optional), or **TRMNL server URL** for a
+   TRMNL BYOS server. If both sources are compiled in, Settings → Display →
+   **Dashboard source** chooses between them.
+2. Home → **Dashboard**, then **Confirm** to download. From then on it opens
    offline; **Left/Right** switch between screens.
-4. Settings → Display → **Sleep Screen** → *Dashboard* or
+3. Settings → Display → **Sleep Screen** → *Dashboard* or
    *Dashboard + Auto-update* to make the selected screen the screensaver.
 
-Run the companion
-[x4-dashboard-server](https://github.com/wolodarskij/x4-dashboard-server) and
-point **Dashboard server URL** at `http://<pc-ip>:8080` (the root — the device
-appends `/screens.json` itself). For the older Simple source, point
-**Dashboard URL** at `http://<pc-ip>:8080/dashboard.bmp` instead.
-
 **No server at all:** copy 480×800 BMPs into a `/dashboards` folder on the SD
-card and go straight to step 3. One file per screen; the filename is the name
+card and go straight to step 2. One file per screen; the filename is the name
 you will see.
 
 ### Bluetooth keyboard / remote
