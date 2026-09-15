@@ -160,6 +160,9 @@ void MappedInputManager::pollBle() {
 
   freeink::KeyEvent ev;
   while (BleHid.popKey(ev)) {
+    // Lock-state keys (Caps Lock) are tracked for every event, whichever
+    // consumer below ends up with it, so text entry sees the right case.
+    bleinput::observeKey(ev);
     uint8_t kind = 0xFF;
     uint8_t value = 0;
     if (!bleinput::encodeKey(ev, kind, value)) continue;

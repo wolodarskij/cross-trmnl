@@ -16,8 +16,11 @@
  * /dashboards yourself and they are indistinguishable from downloaded ones.
  *
  * Server contract: x4-dashboard-server's docs/screens-format.md.
- *   GET {base}/screens.json   -> {format, version, screens:[{id, name, url}]}
+ *   GET {manifest}            -> {format, version, screens:[{id, name, url}]}
  *   GET {base}{screen.url}    -> the BMP, already panel-ready
+ * where {base} is the directory the manifest was fetched from. The manifest
+ * URL itself comes from DashboardImage, which derives it from the one server
+ * address the user configures.
  *
  * A sync never deletes. A screen removed on the server, and a file the user
  * copied in by hand, are the same thing from here: a BMP with no manifest
@@ -50,17 +53,18 @@ class DashboardSet {
   // Absolute path of a screen's BMP. Does not check that it exists.
   static std::string pathFor(const std::string& id);
 
-  // True when a screen-set server address is configured.
-  static bool isConfigured();
+  // True when the store holds at least one screen.
+  static bool hasScreens();
 
   // Fetches the manifest and downloads every screen it lists. WiFi must
   // already be connected. Individual screen failures are skipped rather than
   // aborting the run, so one broken screen cannot block the rest.
-  // Returns the number of screens successfully written.
-  static size_t syncAll();
+  // Returns the number of screens successfully written; 0 also when the
+  // server has no manifest at all (single-image mode, handled by the caller).
+  static size_t syncAll(const std::string& manifestUrl);
 
   // Refreshes a single screen, for the sleep path where downloading the whole
   // set on every sleep would cost far more than the one image being shown.
   // Falls back to the manifest's active screen when id is empty or unknown.
-  static bool syncOne(const std::string& id);
+  static bool syncOne(const std::string& id, const std::string& manifestUrl);
 };

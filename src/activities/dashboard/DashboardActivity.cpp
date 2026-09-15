@@ -18,8 +18,14 @@
 #include "fontIds.h"
 #include "network/DashboardImage.h"
 
-bool DashboardActivity::usingScreenSet() const {
-  return SETTINGS.dashboardSource == CrossPointSettings::DASHBOARD_SOURCE_SCREENSET;
+bool DashboardActivity::usingX4() const { return DashboardImage::activeSource() == DashboardImage::Source::X4; }
+
+int DashboardActivity::screenCount() const {
+#if CROSSPOINT_FEATURE_DASHBOARD
+  return static_cast<int>(screens.size());
+#else
+  return 0;
+#endif
 }
 
 void DashboardActivity::onEnter() {
@@ -55,9 +61,10 @@ void DashboardActivity::onExit() {
 }
 
 void DashboardActivity::reloadScreens() {
-  screens.clear();
   selected = 0;
-  if (!usingScreenSet()) return;  // legacy sources own one image, not a set
+#if CROSSPOINT_FEATURE_DASHBOARD
+  screens.clear();
+  if (!usingX4()) return;  // TRMNL owns one image, not a set
 
   DashboardSet::scan(screens);
   if (screens.empty()) return;
@@ -71,17 +78,20 @@ void DashboardActivity::reloadScreens() {
     if (it != screens.end()) selected = static_cast<int>(std::distance(screens.begin(), it));
   }
   applySelection();
+#endif
 }
 
 void DashboardActivity::applySelection() {
+#if CROSSPOINT_FEATURE_DASHBOARD
   if (screens.empty()) return;
   // Memory only. Costs nothing per press, and leaves the sleep path and the
   // renderer looking at the same screen the user is.
   APP_STATE.dashboardScreenId = screens[selected].id;
+#endif
 }
 
 void DashboardActivity::step(const int delta) {
-  const int count = static_cast<int>(screens.size());
+  const int count = screenCount();
   if (count < 2) return;
   selected = (selected + delta % count + count) % count;
   applySelection();
@@ -90,10 +100,10 @@ void DashboardActivity::step(const int delta) {
 }
 
 std::string DashboardActivity::currentPath() const {
-  if (usingScreenSet()) {
-    if (screens.empty()) return {};
-    return DashboardSet::pathFor(screens[selected].id);
-  }
+#if CROSSPOINT_FEATURE_DASHBOARD
+  if (usingX4() && !screens.empty()) return DashboardSet::pathFor(screens[selected].id);
+#endif
+  // Single-image server, TRMNL, or nothing synced yet: the cache slot.
   return DashboardImage::currentImagePath();
 }
 
@@ -118,7 +128,9 @@ void DashboardActivity::runSync() {
   syncSucceeded = false;
 
   if (WiFi.status() == WL_CONNECTED) {
-    syncSucceeded = usingScreenSet() ? DashboardSet::syncAll() > 0 : DashboardImage::fetchToCache();
+    // Whole set when the server has a manifest, else the single image; the
+    // source decides, not a setting.
+    syncSucceeded = DashboardImage::syncAll() > 0;
   }
 
   // Rescan either way: a partial sync still added files worth listing, and a
@@ -180,7 +192,7 @@ void DashboardActivity::render(RenderLock&&) {
   if (state == SYNCING) {
     renderer.clearScreen();
     renderer.drawCenteredText(UI_12_FONT_ID, pageHeight / 2,
-                              usingScreenSet() ? tr(STR_DASHBOARD_SYNCING) : tr(STR_DASHBOARD_FETCHING));
+                              usingX4() ? tr(STR_DASHBOARD_SYNCING) : tr(STR_DASHBOARD_FETCHING));
     renderer.displayBuffer();
     return;
   }
@@ -188,24 +200,26 @@ void DashboardActivity::render(RenderLock&&) {
   if (state == EMPTY) {
     renderer.clearScreen();
     if (!DashboardImage::isConfigured()) {
+      // No address for the active source. The x4 store can still be filled by
+      // hand from the card, so its message says so.
       renderer.drawCenteredText(UI_12_FONT_ID, pageHeight / 2 - 20,
-                                usingScreenSet() ? tr(STR_DASHBOARD_NO_SCREENS) : tr(STR_DASHBOARD_NO_URL), true,
+                                usingX4() ? tr(STR_DASHBOARD_NO_SCREENS) : tr(STR_DASHBOARD_NO_IMAGE), true,
                                 EpdFontFamily::BOLD);
       renderer.drawCenteredText(UI_10_FONT_ID, pageHeight / 2 + 10,
-                                usingScreenSet() ? tr(STR_DASHBOARD_NO_SERVER) : tr(STR_CHECK_SERIAL_OUTPUT));
+                                usingX4() ? tr(STR_DASHBOARD_NO_SERVER) : tr(STR_DASHBOARD_NO_URL));
     } else if (syncAttempted && !syncSucceeded) {
       renderer.drawCenteredText(UI_12_FONT_ID, pageHeight / 2 - 20, tr(STR_DASHBOARD_SYNC_FAILED), true,
                                 EpdFontFamily::BOLD);
       renderer.drawCenteredText(UI_10_FONT_ID, pageHeight / 2 + 10, tr(STR_CHECK_SERIAL_OUTPUT));
     } else {
       // Configured, nothing fetched yet. The two sources need different
-      // advice: a screen set can be filled by hand from the card, a single
-      // image URL can only be downloaded.
+      // advice: the x4 store can be filled by hand from the card, a TRMNL
+      // image can only be downloaded.
       renderer.drawCenteredText(UI_12_FONT_ID, pageHeight / 2 - 20,
-                                usingScreenSet() ? tr(STR_DASHBOARD_NO_SCREENS) : tr(STR_DASHBOARD_NO_IMAGE), true,
+                                usingX4() ? tr(STR_DASHBOARD_NO_SCREENS) : tr(STR_DASHBOARD_NO_IMAGE), true,
                                 EpdFontFamily::BOLD);
       renderer.drawCenteredText(UI_10_FONT_ID, pageHeight / 2 + 10,
-                                usingScreenSet() ? tr(STR_DASHBOARD_ADD_SCREENS) : tr(STR_DASHBOARD_PRESS_SYNC));
+                                usingX4() ? tr(STR_DASHBOARD_ADD_SCREENS) : tr(STR_DASHBOARD_PRESS_SYNC));
     }
     const auto labels = mappedInput.mapLabels(tr(STR_BACK), tr(STR_DASHBOARD_SYNC), "", "");
     GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
@@ -273,12 +287,14 @@ void DashboardActivity::renderImage(const std::string& path) {
   const bool hasGreyscale = bitmap.hasGreyscale();
   if (!hasGreyscale) {
     char footer[96] = "";
+#if CROSSPOINT_FEATURE_DASHBOARD
     if (screens.size() > 1) {
       snprintf(footer, sizeof(footer), "%s  (%d/%d)", screens[selected].name.c_str(), selected + 1,
                static_cast<int>(screens.size()));
     }
+#endif
     if (syncAttempted && !syncSucceeded) {
-      const char* failed = usingScreenSet() ? tr(STR_DASHBOARD_SYNC_FAILED) : tr(STR_DASHBOARD_FETCH_FAILED);
+      const char* failed = usingX4() ? tr(STR_DASHBOARD_SYNC_FAILED) : tr(STR_DASHBOARD_FETCH_FAILED);
       if (footer[0] != '\0') {
         const size_t used = strlen(footer);
         snprintf(footer + used, sizeof(footer) - used, "  -  %s", failed);

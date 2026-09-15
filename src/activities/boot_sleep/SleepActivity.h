@@ -8,6 +8,9 @@ class SleepActivity final : public Activity {
   explicit SleepActivity(GfxRenderer& renderer, MappedInputManager& mappedInput, bool fromTimeout = false)
       : Activity("Sleep", renderer, mappedInput), fromTimeout(fromTimeout) {}
   void onEnter() override;
+  // The stack is torn down on the way into deep sleep; the lifecycle must not
+  // bring it back while the sleep screen renders.
+  bool suspendsBluetooth() const override { return true; }
 
  private:
   void renderDefaultSleepScreen() const;

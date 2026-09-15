@@ -42,6 +42,21 @@ class KeyboardEntryActivity : public Activity {
   // Drain BLE keyboard events from the MappedInputManager text sink into the
   // field. Returns false when a drained key completed/cancelled the activity.
   bool drainBleKeys();
+  // True while the on-screen keyboard is hidden: the user enabled "Hide
+  // on-screen keyboard" in the Bluetooth settings and a BLE keyboard is
+  // connected right now. Text then comes from the keyboard only; the front
+  // buttons still confirm/cancel and move the caret.
+  bool bleKeyboardOnly() const;
+  void handleBleOnlyButtons();
+  // bleKeyboardOnly() as of the last frame, so a keyboard (dis)connecting while
+  // the field is open repaints with/without the on-screen keys.
+  bool bleOnlyMode = false;
+  // Caret edits step over whole UTF-8 sequences: BLE keyboards type multi-byte
+  // characters, and a caret parked inside one renders broken glyphs.
+  void eraseBeforeCursor();
+  void eraseAtCursor();
+  void moveCursorLeft();
+  void moveCursorRight();
   std::string title;
   std::string text;
   size_t maxLength;

@@ -111,13 +111,14 @@ inline std::vector<SettingInfo> getSettingsList(const SdCardFontRegistry* regist
             {StrId::STR_DARK, StrId::STR_LIGHT, StrId::STR_CUSTOM, StrId::STR_COVER, StrId::STR_NONE_OPT,
              StrId::STR_COVER_CUSTOM, StrId::STR_QUICK_RESUME, StrId::STR_DASHBOARD, StrId::STR_DASHBOARD_AUTOUPDATE},
             "sleepScreen", StrId::STR_CAT_DISPLAY),
+        // Dashboard entries stay in this list in every build variant so the
+        // settings file round-trips; SettingsActivity hides the ones whose
+        // feature is compiled out (see Features.h).
         SettingInfo::Enum(StrId::STR_DASHBOARD_SOURCE, &CrossPointSettings::dashboardSource,
-                          {StrId::STR_DASHBOARD_SOURCE_SIMPLE, StrId::STR_TRMNL, StrId::STR_DASHBOARD_SOURCE_SCREENS},
-                          "dashboardSource", StrId::STR_CAT_DISPLAY),
+                          {StrId::STR_DASHBOARD_SOURCE_X4, StrId::STR_TRMNL}, "dashboardSource",
+                          StrId::STR_CAT_DISPLAY),
         SettingInfo::String(StrId::STR_DASHBOARD_URL, SETTINGS.dashboardUrl, sizeof(SETTINGS.dashboardUrl),
                             "dashboardUrl", StrId::STR_CAT_DISPLAY),
-        SettingInfo::String(StrId::STR_DASHBOARD_SET_URL, SETTINGS.dashboardSetUrl, sizeof(SETTINGS.dashboardSetUrl),
-                            "dashboardSetUrl", StrId::STR_CAT_DISPLAY),
         SettingInfo::String(StrId::STR_TRMNL_URL, SETTINGS.trmnlUrl, sizeof(SETTINGS.trmnlUrl), "trmnlUrl",
                             StrId::STR_CAT_DISPLAY),
         SettingInfo::String(StrId::STR_TRMNL_API_KEY, SETTINGS.trmnlApiKey, sizeof(SETTINGS.trmnlApiKey), "trmnlApiKey",

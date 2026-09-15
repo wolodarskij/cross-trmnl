@@ -17,6 +17,8 @@
 
 #include <cstdint>
 
+#include "BleKeyboardLayouts.h"
+
 class GfxRenderer;
 class MappedInputManager;
 
@@ -60,5 +62,23 @@ bool encodeKey(const freeink::KeyEvent& ev, uint8_t& kind, uint8_t& value);
 // Human-readable name for a stored (kind, value) identity, for the mapping UI.
 // Writes a null-terminated string into out (e.g. "Page Down", "Key 0x4B").
 void describeKey(uint8_t kind, uint8_t value, char* out, size_t outLen);
+
+// --- Text entry (keyboard layouts) --------------------------------------------
+
+// Feed every decoded key event through here (MappedInputManager::pollBle does)
+// so lock-state keys are tracked regardless of which consumer gets the event.
+// Today that is Caps Lock, which HID reports do not carry as a modifier bit.
+void observeKey(const freeink::KeyEvent& ev);
+
+// The layout selected in SETTINGS.bleKeyboardLayout (US when the id is unknown).
+const blelayout::Layout& activeLayout();
+
+// Translate a key event into the UTF-8 text it types under the active layout.
+// Writes a null-terminated string of at most 3 bytes + NUL into out (outLen must
+// be >= 5). Returns false when the event types nothing: special keys, unknown
+// usages, empty levels, and Ctrl/Alt/GUI chords (AltGr is a level, not a
+// chord). Text consumers must use this instead of KeyEvent::ch, which the SDK
+// resolves as US QWERTY only.
+bool keyText(const freeink::KeyEvent& ev, char* out, size_t outLen);
 
 }  // namespace bleinput

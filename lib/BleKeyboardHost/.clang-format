@@ -1,0 +1,4 @@
+# Vendored copy of freeink-sdk/libs/network/BleKeyboardHost (see UPSTREAM.md).
+# Keep it byte-for-byte in the SDK's own style so freeink-sdk.patch stays
+# applicable and diffs against upstream show only real changes.
+DisableFormat: true

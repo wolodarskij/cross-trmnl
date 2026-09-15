@@ -62,10 +62,17 @@ Two new sleep-screen modes (Settings → Display → Sleep Screen):
 - Additionally, sleeping while the Dashboard viewer is open always keeps the
   dashboard visible, regardless of the configured sleep-screen mode.
 
-### Three image sources (Settings → Display → Dashboard source)
-- **Screen set** — many screens from one server (`Dashboard server URL`
-  setting, pointing at the server *root*, e.g. `http://192.168.1.20:8080`).
-  Implements x4-dashboard-server's
+### Two image sources (Settings → Display → Dashboard source)
+Each source is also a build option (`--no-dashboard`, `--no-trmnl`); with
+only one compiled in the selector disappears and that source is used.
+- **X4 dashboard server** — one `Dashboard server address` setting (the
+  server root, e.g. `192.168.1.20:8080`; scheme optional). The server decides
+  the mode: a `screens.json` manifest means a screen set, otherwise the single
+  `dashboard.bmp` is fetched into the one-slot cache at
+  `/.crosspoint/dashboard.bmp`. An address ending in `.json` or `.bmp` is used
+  as-is. The former `Dashboard URL` / `Dashboard server URL` pair and the
+  "Simple" / "Screen set" choice are gone; the old `dashboardSetUrl` value is
+  migrated on load. The screen-set side implements x4-dashboard-server's
   [screen-list contract](https://github.com/wolodarskij/x4-dashboard-server/blob/main/docs/screens-format.md):
   - `GET {base}/screens.json` for the manifest, rejected unless `format` is
     `x4-dashboard-set`;
@@ -77,11 +84,6 @@ Two new sleep-screen modes (Settings → Display → Sleep Screen):
     label them offline (BMPs carry no name of their own);
   - bounded on purpose: at most 32 screens and a 32 KB manifest, and only
     `id`/`name`/`url` parsed out of it.
-- **Simple** — fetches a single BMP from a plain URL (`Dashboard URL`
-  setting), into the one-slot cache at `/.crosspoint/dashboard.bmp`. The
-  original source, kept unchanged for existing setups; the same
-  [x4-dashboard-server](https://github.com/wolodarskij/x4-dashboard-server)
-  still serves it at `/dashboard.bmp`.
 - **TRMNL** — speaks the TRMNL/BYOS device API against self-hosted servers
   (e.g. [byos_fastapi](https://github.com/usetrmnl/byos_fastapi),
   [terminus](https://github.com/usetrmnl/terminus)):
@@ -123,18 +125,40 @@ Two new sleep-screen modes (Settings → Display → Sleep Screen):
   "Cover + Custom" actually enable *Blank* and "None" enable *Cover + Custom*.
   Restored the correct order and documented the invariant.
 
+### Optional features (build switches)
+- Every fork feature is a build option: `build.bat default --no-bluetooth
+  --no-dashboard --no-trmnl --no-lua` in any combination (all on by default;
+  `slim` is always without Bluetooth). `scripts/features.py` turns the flags
+  into `CROSSPOINT_FEATURE_*` defines (`src/Features.h`), drops the feature's
+  sources from the build so the LDF never pulls its library (Lua, NimBLE),
+  and hides its settings rows. Settings fields and enum values stay in every
+  variant so `settings.json` survives flashing a different one.
+
 ### Bluetooth HID input (BLE keyboards & page-turner remotes)
-- Built on the FreeInk SDK's vendored `BleKeyboardHost` (NimBLE central,
-  enabled via `FREEINK_CAP_BLE_HID_HOST`) with the field-tested lifecycle from
+- Built on a project copy of the FreeInk SDK's `BleKeyboardHost`
+  (`lib/BleKeyboardHost`, NimBLE central, enabled via
+  `FREEINK_CAP_BLE_HID_HOST`). The copy carries HID-report fixes the submodule
+  lacks; `lib/BleKeyboardHost/UPSTREAM.md` records the origin commit and the
+  diff, and the submodule itself is never modified. Uses the field-tested lifecycle from
   upstream's `feat-bluetooth` branch: scan/pair/bond UI
-  (Settings → Controls → Bluetooth), NVS-persisted bonds with auto-reconnect,
+  (Settings → System → Bluetooth), NVS-persisted bonds with auto-reconnect,
   a per-button remap UI for remotes, an in-reader Bluetooth toggle, and a
-  status-bar icon while connected.
-- **Strict RAM lifecycle**: the BLE stack is resident only while a reader, the
-  Bluetooth settings screen, or a text field is on the activity stack AND WiFi
-  is off; `begin()`/`end()` return the full ~52 KB to the heap, heap floors
-  defer starts, and heap-starved reader builds shed the stack. `slim` builds
-  compile the capability out entirely (zero flash/RAM).
+  status-bar icon while connected. The paired-device list marks the live
+  link and no longer re-issues a connect to it.
+- **RAM lifecycle**: while Bluetooth is enabled the stack is resident on every
+  screen (so a keyboard drives home, browser and settings too) except while
+  WiFi is up or the device is going to sleep; `begin()`/`end()` return the
+  full ~52 KB to the heap, heap floors defer starts, and heap-starved reader
+  builds shed the stack. `slim` builds compile the capability out entirely
+  (zero flash/RAM).
+- **Keyboard layouts**: text entry resolves HID usages against a selectable
+  layout table (`src/BleKeyboardLayouts.cpp`, 15 layouts, AltGr levels, Caps
+  Lock tracking) instead of the SDK's fixed US map. Tables are `constexpr`
+  overrides on a parent layout, live in flash, and cost no RAM whether or not
+  they are selected; a new layout is one table plus one name string.
+- **Hide on-screen keyboard**: an option in the Bluetooth menu that hides the
+  on-screen keys in every text field while a keyboard is connected (Enter/Esc
+  and the front buttons confirm/cancel; the keys return when it disconnects).
 - **Keyboard-first additions on top of upstream**: a default navigation map
   (arrows/Enter/Escape/PageUp/PageDown work with no mapping session) and a
   text-sink mode that routes full key events into whatever text UI is open —

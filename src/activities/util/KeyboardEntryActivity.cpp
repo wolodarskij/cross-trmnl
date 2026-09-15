@@ -2,9 +2,12 @@
 
 #include <HalGPIO.h>
 #include <I18n.h>
+#include <Utf8.h>
 
 #include <algorithm>
 
+#include "BleInput.h"
+#include "CrossPointSettings.h"
 #include "MappedInputManager.h"
 #include "components/UITheme.h"
 #include "fontIds.h"
@@ -31,7 +34,60 @@ void KeyboardEntryActivity::onEnter() {
   rightStartCursorPos = 0;
   // Route BLE keyboard keys into this field instead of the logical-button overlay.
   mappedInput.setBleTextSink(true);
+  bleOnlyMode = bleKeyboardOnly();
   requestUpdate();
+}
+
+bool KeyboardEntryActivity::bleKeyboardOnly() const {
+  return SETTINGS.bleHideOnScreenKeyboard != 0 && BleHid.isConnected();
+}
+
+void KeyboardEntryActivity::handleBleOnlyButtons() {
+  if (mappedInput.wasPressed(MappedInputManager::Button::Back)) {
+    onCancel();
+    return;
+  }
+  if (mappedInput.wasPressed(MappedInputManager::Button::Confirm)) {
+    onComplete(text);
+    return;
+  }
+  if (mappedInput.wasPressed(MappedInputManager::Button::Left)) {
+    moveCursorLeft();
+    cursorMode = true;
+    requestUpdate();
+  }
+  if (mappedInput.wasPressed(MappedInputManager::Button::Right)) {
+    moveCursorRight();
+    cursorMode = true;
+    requestUpdate();
+  }
+  // No [abc]/[***] key to reach without the on-screen keyboard: the side
+  // button toggles password visibility instead.
+  if (inputType == InputType::Password && mappedInput.wasPressed(MappedInputManager::Button::Up)) {
+    passwordVisible = !passwordVisible;
+    requestUpdate();
+  }
+}
+
+void KeyboardEntryActivity::eraseBeforeCursor() {
+  if (cursorPos == 0 || text.empty()) return;
+  if (cursorPos > text.length()) cursorPos = text.length();
+  const size_t start = utf8PrevCharStart(text, cursorPos);
+  text.erase(start, cursorPos - start);
+  cursorPos = start;
+}
+
+void KeyboardEntryActivity::eraseAtCursor() {
+  if (cursorPos >= text.length()) return;
+  text.erase(cursorPos, utf8NextCharEnd(text, cursorPos) - cursorPos);
+}
+
+void KeyboardEntryActivity::moveCursorLeft() {
+  if (cursorPos > 0) cursorPos = utf8PrevCharStart(text, cursorPos);
+}
+
+void KeyboardEntryActivity::moveCursorRight() {
+  if (cursorPos < text.length()) cursorPos = utf8NextCharEnd(text, cursorPos);
 }
 
 void KeyboardEntryActivity::onExit() {
@@ -152,10 +208,7 @@ bool KeyboardEntryActivity::handleKeyPress() {
           hintVisible = true;
           hintShowTime = millis();
         }
-        if (cursorPos > 0 && !text.empty()) {
-          text.erase(cursorPos - 1, 1);
-          cursorPos--;
-        }
+        eraseBeforeCursor();
         return true;
       case SpecialKeyType::Ok:
         delPressCount = 0;
@@ -187,26 +240,25 @@ bool KeyboardEntryActivity::drainBleKeys() {
   freeink::KeyEvent ev;
   bool changed = false;
   while (mappedInput.popBleTextKey(ev)) {
-    // A printable arriving with Ctrl/Alt/GUI held is a shortcut chord, not text;
-    // typing its letter into the field would be wrong (Ctrl+A must not insert 'a').
-    // 0xDD = both Ctrl, both Alt, both GUI — Shift is deliberately excluded.
-    if (ev.ch != 0 && (ev.mods & 0xDD) != 0) continue;
-    if (ev.ch != 0) {
-      insertChar(ev.ch);
+    // Text under the selected keyboard layout (SETTINGS.bleKeyboardLayout).
+    // keyText() also rejects Ctrl/Alt/GUI chords (Ctrl+A must not insert 'a');
+    // those fall through to the switch with special == None and are dropped.
+    char utf8[5];
+    if (bleinput::keyText(ev, utf8, sizeof(utf8))) {
+      insertString(utf8);
       changed = true;
       continue;
     }
     switch (ev.special) {
       case freeink::SpecialKey::Backspace:
         if (cursorPos > 0 && !text.empty()) {
-          text.erase(cursorPos - 1, 1);
-          cursorPos--;
+          eraseBeforeCursor();
           changed = true;
         }
         break;
       case freeink::SpecialKey::Delete:
         if (cursorPos < text.length()) {
-          text.erase(cursorPos, 1);
+          eraseAtCursor();
           changed = true;
         }
         break;
@@ -219,12 +271,12 @@ bool KeyboardEntryActivity::drainBleKeys() {
       // Arrows/Home/End move the caret and surface it (cursorMode), mirroring the
       // long-press-Up entry into cursor mode on the on-screen keyboard.
       case freeink::SpecialKey::Left:
-        if (cursorPos > 0) cursorPos--;
+        moveCursorLeft();
         cursorMode = true;
         changed = true;
         break;
       case freeink::SpecialKey::Right:
-        if (cursorPos < text.length()) cursorPos++;
+        moveCursorRight();
         cursorMode = true;
         changed = true;
         break;
@@ -262,6 +314,17 @@ void KeyboardEntryActivity::loop() {
   // BLE keyboard input first: a drained Enter/Escape finishes the activity, in
   // which case the on-screen keyboard must not also process this frame.
   if (!drainBleKeys()) return;
+
+  // Hide / show the on-screen keyboard as the BLE keyboard comes and goes.
+  const bool bleOnly = bleKeyboardOnly();
+  if (bleOnly != bleOnlyMode) {
+    bleOnlyMode = bleOnly;
+    requestUpdate();
+  }
+  if (bleOnlyMode) {
+    handleBleOnlyButtons();
+    return;
+  }
 
   const int totalRows = getTotalRowCount();
 
@@ -343,7 +406,7 @@ void KeyboardEntryActivity::loop() {
         togglePos = false;
         requestUpdate();
       } else if (cursorPos > 0) {
-        cursorPos--;
+        moveCursorLeft();
         requestUpdate();
       }
     }
@@ -380,7 +443,7 @@ void KeyboardEntryActivity::loop() {
       rightLongHandled = false;
     }
     if (cursorMode && !togglePos && cursorPos < text.length()) {
-      cursorPos++;
+      moveCursorRight();
       requestUpdate();
     }
     if (cursorMode) return;
@@ -482,9 +545,11 @@ void KeyboardEntryActivity::render(RenderLock&&) {
   const int maxLineWidth = textAreaWidth;
   const bool centerText = metrics.keyboardCenteredText;
 
+  // Byte length of the (possibly multi-byte) character under the caret.
+  const size_t cursorCharLen = cursorPos < text.length() ? utf8NextCharEnd(text, cursorPos) - cursorPos : 0;
   int cursorCharWidth = 6;
-  if (cursorPos < text.length()) {
-    int w = renderer.getTextWidth(UI_12_FONT_ID, text.substr(cursorPos, 1).c_str());
+  if (cursorCharLen > 0) {
+    int w = renderer.getTextWidth(UI_12_FONT_ID, text.substr(cursorPos, cursorCharLen).c_str());
     if (w > cursorCharWidth) cursorCharWidth = w;
   }
 
@@ -512,11 +577,11 @@ void KeyboardEntryActivity::render(RenderLock&&) {
         int beforeWidth = renderer.getTextAdvanceX(UI_12_FONT_ID, beforeCursor.c_str(), EpdFontFamily::REGULAR);
         int kernOffset = 0;
         if (cursorPos < displayText.length()) {
-          std::string beforeAndCursor = beforeCursor + displayText.substr(cursorPos, 1);
+          std::string beforeAndCursor = beforeCursor + displayText.substr(cursorPos, cursorCharLen);
           int beforeAndCursorWidth =
               renderer.getTextAdvanceX(UI_12_FONT_ID, beforeAndCursor.c_str(), EpdFontFamily::REGULAR);
-          int charAdvance =
-              renderer.getTextAdvanceX(UI_12_FONT_ID, displayText.substr(cursorPos, 1).c_str(), EpdFontFamily::REGULAR);
+          int charAdvance = renderer.getTextAdvanceX(
+              UI_12_FONT_ID, displayText.substr(cursorPos, cursorCharLen).c_str(), EpdFontFamily::REGULAR);
           kernOffset = beforeAndCursorWidth - beforeWidth - charAdvance;
         }
         if (centerText) {
@@ -538,7 +603,7 @@ void KeyboardEntryActivity::render(RenderLock&&) {
         renderer.drawText(UI_12_FONT_ID, lineStartX, inputStartY + inputHeight, part1.c_str());
         // Part 2: skip cursor slot (block + actual char drawn later)
         // Part 3: chars after cursor position (skip char under cursor), starting at cursorPixelX + cursorCharWidth
-        const int afterStart = static_cast<int>(cursorPos) + (cursorPos < text.length() ? 1 : 0);
+        const int afterStart = static_cast<int>(cursorPos + cursorCharLen);
         const int afterEnd = lineEndIdx;
         if (afterStart < afterEnd) {
           const std::string part3 = displayText.substr(afterStart, afterEnd - afterStart);
@@ -555,7 +620,8 @@ void KeyboardEntryActivity::render(RenderLock&&) {
       lineStartIdx = lineEndIdx;
       lineEndIdx = displayText.length();
     } else {
-      lineEndIdx -= 1;
+      // Back off one whole character so a line never ends mid-sequence.
+      lineEndIdx = static_cast<int>(utf8PrevCharStart(displayText, lineEndIdx));
     }
   }
 
@@ -567,9 +633,9 @@ void KeyboardEntryActivity::render(RenderLock&&) {
   if (cursorMode && !togglePos && cursorPos <= displayText.length()) {
     static constexpr int blockPadding = 1;
     renderer.fillRect(cursorPixelX - blockPadding, cursorLineY, cursorCharWidth + blockPadding * 2, lineHeight, true);
-    if (cursorPos < text.length()) {
-      const char buf[2] = {text[cursorPos], '\0'};
-      renderer.drawText(UI_12_FONT_ID, cursorPixelX, cursorLineY, buf, false);
+    if (cursorCharLen > 0) {
+      const std::string underCursor = text.substr(cursorPos, cursorCharLen);
+      renderer.drawText(UI_12_FONT_ID, cursorPixelX, cursorLineY, underCursor.c_str(), false);
     }
   } else if (cursorPos <= displayText.length()) {
     static constexpr int serifW = 3;
@@ -596,6 +662,24 @@ void KeyboardEntryActivity::render(RenderLock&&) {
     } else {
       renderer.drawText(UI_12_FONT_ID, toggleX, toggleY, toggleLabel, true);
     }
+  }
+
+  if (bleOnlyMode) {
+    // On-screen keyboard hidden: the field is typed on the BLE keyboard, so
+    // only the field, a short reminder and the button roles are drawn.
+    const int hintLh = renderer.getLineHeight(SMALL_FONT_ID);
+    int y = inputStartY + inputHeight + lineHeight + metrics.verticalSpacing * 3;
+    renderer.drawCenteredText(SMALL_FONT_ID, y, tr(STR_BT_TYPE_HINT), true);
+    y += hintLh;
+    renderer.drawCenteredText(SMALL_FONT_ID, y, tr(STR_BT_TYPE_HINT_KEYS), true);
+    if (isPassword) {
+      y += hintLh;
+      renderer.drawCenteredText(SMALL_FONT_ID, y, tr(STR_BT_TYPE_HINT_PASSWORD), true);
+    }
+    const auto labels = mappedInput.mapLabels(tr(STR_BACK), tr(STR_OK_BUTTON), tr(STR_DIR_LEFT), tr(STR_DIR_RIGHT));
+    GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
+    renderer.displayBuffer();
+    return;
   }
 
   if (hintVisible && !text.empty()) {

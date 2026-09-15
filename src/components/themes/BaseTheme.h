@@ -247,6 +247,11 @@ class BaseTheme {
   virtual void drawButtonMenu(GfxRenderer& renderer, Rect rect, int buttonCount, int selectedIndex,
                               const std::function<std::string(int index)>& buttonLabel,
                               const std::function<UIIcon(int index)>& rowIcon) const;
+  // First item of a scrolling window over itemCount rows of which visibleItems
+  // fit. Unlike page flipping, the selection walks down to the last visible
+  // row and then drags the list up behind it one row at a time, so the rows
+  // around the cursor stay on screen. Stateless: derived from the selection.
+  static int scrollWindowStart(int itemCount, int visibleItems, int selectedIndex);
   virtual Rect drawPopup(const GfxRenderer& renderer, const char* message) const;
   virtual void drawOptionPopup(const GfxRenderer& renderer, const char* title, const std::vector<std::string>& options,
                                int selectedIndex) const;

@@ -9,7 +9,6 @@
 #include <algorithm>
 #include <cstring>
 
-#include "CrossPointSettings.h"
 #include "network/HttpDownloader.h"
 
 namespace {
@@ -25,10 +24,11 @@ constexpr const char* kTmpPath = "/dashboards/.download.tmp";
 // before the parser ever sees it.
 constexpr size_t kMaxManifestBytes = 32 * 1024;
 
-std::string baseUrl() {
-  std::string base = SETTINGS.dashboardSetUrl;
-  while (!base.empty() && base.back() == '/') base.pop_back();
-  return base;
+// The directory the manifest lives in; relative screen urls resolve against it.
+std::string manifestBase(const std::string& manifestUrl) {
+  const size_t slash = manifestUrl.find_last_of('/');
+  if (slash == std::string::npos || slash < 8) return manifestUrl;  // keep "http://" intact
+  return manifestUrl.substr(0, slash);
 }
 
 // Ids reach the filesystem as path components, so they are validated rather
@@ -74,7 +74,7 @@ bool fetchBounded(const std::string& url, std::string& out) {
   return ok && !out.empty();
 }
 
-// Fetches and validates {base}/screens.json. The document stays with the
+// Fetches and validates the manifest. The document stays with the
 // caller so downloads can read each screen's own url straight out of it -
 // copying those urls into a list first would hold a third string per screen
 // for the whole sync, to no end.
@@ -83,16 +83,17 @@ bool fetchBounded(const std::string& url, std::string& out) {
 // carries sizes, revisions and timestamps, which matter to clients that cache
 // or rotate on a timer; parsing them here would cost heap for values nothing
 // reads.
-bool fetchManifest(JsonDocument& doc) {
-  const std::string base = baseUrl();
-  if (base.empty()) {
+bool fetchManifest(JsonDocument& doc, const std::string& manifestUrl) {
+  if (manifestUrl.empty()) {
     LOG_INF("DSET", "No dashboard server URL configured");
     return false;
   }
 
   std::string body;
-  if (!fetchBounded(base + "/screens.json", body)) {
-    LOG_ERR("DSET", "Cannot fetch screens.json from %s", base.c_str());
+  if (!fetchBounded(manifestUrl, body)) {
+    // Not necessarily an error: a server in single-image mode has no manifest,
+    // and DashboardImage falls back to dashboard.bmp.
+    LOG_INF("DSET", "No manifest at %s", manifestUrl.c_str());
     return false;
   }
 
@@ -120,8 +121,8 @@ bool fetchManifest(JsonDocument& doc) {
 
 // Downloads one screen into the store via a temp file, so a failed or
 // truncated transfer leaves the previous copy in place.
-bool download(const std::string& id, const std::string& url) {
-  const std::string resolved = resolveUrl(baseUrl(), url);
+bool download(const std::string& id, const std::string& url, const std::string& base) {
+  const std::string resolved = resolveUrl(base, url);
   if (resolved.empty()) return false;
 
   const auto err = HttpDownloader::downloadToFile(resolved, kTmpPath);
@@ -214,7 +215,11 @@ bool ensureStoreDir() {
 
 std::string DashboardSet::pathFor(const std::string& id) { return std::string(kScreensDir) + "/" + id + kBmpExt; }
 
-bool DashboardSet::isConfigured() { return SETTINGS.dashboardSetUrl[0] != '\0'; }
+bool DashboardSet::hasScreens() {
+  std::vector<Screen> screens;
+  scan(screens);
+  return !screens.empty();
+}
 
 void DashboardSet::scan(std::vector<Screen>& out) {
   out.clear();
@@ -250,10 +255,11 @@ void DashboardSet::scan(std::vector<Screen>& out) {
   applyNameIndex(out);
 }
 
-size_t DashboardSet::syncAll() {
+size_t DashboardSet::syncAll(const std::string& manifestUrl) {
   JsonDocument doc;
-  if (!fetchManifest(doc)) return 0;
+  if (!fetchManifest(doc, manifestUrl)) return 0;
   if (!ensureStoreDir()) return 0;
+  const std::string base = manifestBase(manifestUrl);
 
   size_t written = 0;
   size_t seen = 0;
@@ -270,7 +276,7 @@ size_t DashboardSet::syncAll() {
     }
     // One screen failing does not abort the run: the rest of the set is still
     // worth having, and the store keeps whatever was there before.
-    if (download(id, obj["url"] | "")) ++written;
+    if (download(id, obj["url"] | "", base)) ++written;
   }
 
   // Written even after a partial run: the names that did arrive are still
@@ -281,9 +287,9 @@ size_t DashboardSet::syncAll() {
   return written;
 }
 
-bool DashboardSet::syncOne(const std::string& id) {
+bool DashboardSet::syncOne(const std::string& id, const std::string& manifestUrl) {
   JsonDocument doc;
-  if (!fetchManifest(doc)) return false;
+  if (!fetchManifest(doc, manifestUrl)) return false;
   if (!ensureStoreDir()) return false;
 
   JsonArrayConst screens = doc["screens"].as<JsonArrayConst>();
@@ -312,5 +318,5 @@ bool DashboardSet::syncOne(const std::string& id) {
 
   const std::string chosenId = chosen["id"] | "";
   if (!isSafeId(chosenId)) return false;
-  return download(chosenId, chosen["url"] | "");
+  return download(chosenId, chosen["url"] | "", manifestBase(manifestUrl));
 }

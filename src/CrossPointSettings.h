@@ -183,20 +183,16 @@ class CrossPointSettings {
     QUICK_RESUME_SLEEP_SCREEN_COUNT
   };
 
-  // Where dashboard images come from: a plain BMP URL ("simple"), a
-  // TRMNL-compatible server (self-hosted BYOS) speaking /api/setup +
-  // /api/display, or a screen set that serves many BMPs at once (see
-  // DashboardSet). The first two fetch one image into a single cache slot;
-  // the screen set fills /dashboards and the user picks from it.
+  // Where dashboard images come from: our x4-dashboard-server (one address;
+  // it serves a screen set as screens.json, or a single dashboard.bmp - the
+  // firmware tries the manifest first and falls back to the image, see
+  // DashboardImage), or a TRMNL-compatible server (self-hosted BYOS) speaking
+  // /api/setup + /api/display.
   //
-  // Existing values must keep their numbers - they are persisted as-is, so
-  // SCREENSET goes on the end rather than anywhere more logical.
-  enum DASHBOARD_SOURCE {
-    DASHBOARD_SOURCE_SIMPLE = 0,
-    DASHBOARD_SOURCE_TRMNL = 1,
-    DASHBOARD_SOURCE_SCREENSET = 2,
-    DASHBOARD_SOURCE_COUNT
-  };
+  // Values are persisted as-is. 0 was "simple" and 2 "screen set" before the
+  // two x4 modes were unified; 2 now clamps to the default (X4) on load, and
+  // 0 already means X4.
+  enum DASHBOARD_SOURCE { DASHBOARD_SOURCE_X4 = 0, DASHBOARD_SOURCE_TRMNL = 1, DASHBOARD_SOURCE_COUNT };
 
   // Sleep screen settings
   uint8_t sleepScreen = DARK;
@@ -258,6 +254,13 @@ class CrossPointSettings {
     uint8_t button = 0xFF;   // (uint8_t)MappedInputManager::Button; 0xFF = unassigned
   };
   BleKeyMapEntry bleKeyMap[BLE_MAP_CAPACITY] = {};
+  // Layout of the paired BLE keyboard, as a blelayout id ("us", "de", ...). A
+  // string rather than an index so layouts can be added or reordered without
+  // re-mapping persisted values; unknown ids fall back to US.
+  char bleKeyboardLayout[8] = "us";
+  // Skip the on-screen keyboard in text fields while a BLE keyboard is connected
+  // (the field is typed on the keyboard; front buttons still confirm/cancel).
+  uint8_t bleHideOnScreenKeyboard = 0;
   // Reader font settings
   uint8_t fontFamily = NOTOSERIF;
   uint8_t fontSize = MEDIUM;
@@ -303,22 +306,19 @@ class CrossPointSettings {
   uint8_t scriptMemReport = 0;
   // SD card font family name (empty = use built-in fontFamily)
   char sdFontFamilyName[32] = "";
-  // URL of the networked dashboard image (1-bit/greyscale BMP, e.g. our
-  // dashboard_server.py). Fetched on demand from the home menu and on each sleep
-  // when sleepScreen == DASHBOARD/DASHBOARD_AUTOUPDATE.
+  // x4-dashboard-server address (e.g. 192.168.178.20:8080; the scheme is
+  // optional). The server root: DashboardImage tries {root}/screens.json,
+  // then {root}/dashboard.bmp. A path ending in .json or .bmp is used as-is.
+  // Fetched on demand from the dashboard's Sync and on each sleep when
+  // sleepScreen == DASHBOARD_AUTOUPDATE. (Absorbed the former dashboardSetUrl;
+  // JsonSettingsIO migrates that key on load.)
   char dashboardUrl[128] = "";
   // Which dashboard backend the fetch uses (DASHBOARD_SOURCE enum).
-  uint8_t dashboardSource = DASHBOARD_SOURCE_SIMPLE;
+  uint8_t dashboardSource = DASHBOARD_SOURCE_X4;
   // TRMNL/BYOS base URL (e.g. http://192.168.178.20:4567) and device API key.
   // An empty key triggers auto-provisioning via GET /api/setup on first fetch.
   char trmnlUrl[96] = "";
   char trmnlApiKey[48] = "";
-  // Screen-set server base URL (e.g. http://192.168.178.20:8080). The server
-  // root, not a file: DashboardSet appends /screens.json and the per-screen
-  // paths the manifest names. Only used when dashboardSource == SCREENSET,
-  // and only when the user asks for a sync - the dashboard itself reads the
-  // SD card, so this can stay empty on a device that never syncs.
-  char dashboardSetUrl[128] = "";
   // Show hidden files/directories (starting with '.') in the file browser (0 = hidden, 1 = show)
   uint8_t showHiddenFiles = 0;
   // Remove a book from the Recent Books list when its End-of-Book screen is reached (0 = off, 1 = on)

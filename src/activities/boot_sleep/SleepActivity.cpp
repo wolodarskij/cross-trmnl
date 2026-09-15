@@ -11,12 +11,15 @@
 #include "BleInput.h"
 #include "CrossPointSettings.h"
 #include "CrossPointState.h"
+#include "Features.h"
 #include "activities/reader/ReaderUtils.h"
 #include "components/UITheme.h"
 #include "fontIds.h"
 #include "images/Logo120.h"
 #include "images/MoonIcon.h"
+#if CROSSPOINT_FEATURE_DASHBOARD_ANY
 #include "network/DashboardImage.h"
+#endif
 #include "network/WifiConnector.h"
 
 void SleepActivity::onEnter() {
@@ -71,6 +74,13 @@ void SleepActivity::onEnter() {
 }
 
 void SleepActivity::renderDashboardSleepScreen(bool autoUpdate) const {
+#if !CROSSPOINT_FEATURE_DASHBOARD_ANY
+  // No dashboard source in this build: the DASHBOARD sleep modes stay
+  // selectable (their enum values are persisted) but draw the default screen.
+  (void)autoUpdate;
+  renderDefaultSleepScreen();
+  return;
+#else
   // With auto-update, fetch a fresh image on the way into sleep. WiFi is still
   // available here: enterDeepSleep() (main.cpp) only tears the modem down after
   // goToSleep() returns, so no teardown is needed in this path. On any failure
@@ -109,6 +119,7 @@ void SleepActivity::renderDashboardSleepScreen(bool autoUpdate) const {
   }
 
   renderDefaultSleepScreen();
+#endif
 }
 
 void SleepActivity::renderCustomSleepScreen() const {

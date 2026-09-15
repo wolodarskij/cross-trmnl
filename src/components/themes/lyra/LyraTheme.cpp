@@ -6,6 +6,7 @@
 #include <HalStorage.h>
 #include <I18n.h>
 
+#include <algorithm>
 #include <cstdint>
 #include <string>
 #include <vector>
@@ -518,11 +519,26 @@ void LyraTheme::drawEmptyRecents(const GfxRenderer& renderer, const Rect rect) c
 void LyraTheme::drawButtonMenu(GfxRenderer& renderer, Rect rect, int buttonCount, int selectedIndex,
                                const std::function<std::string(int index)>& buttonLabel,
                                const std::function<UIIcon(int index)>& rowIcon) const {
-  for (int i = 0; i < buttonCount; ++i) {
-    int tileWidth = rect.width - LyraMetrics::values.contentSidePadding * 2;
-    Rect tileRect = Rect{rect.x + LyraMetrics::values.contentSidePadding,
-                         rect.y + i * (LyraMetrics::values.menuRowHeight + LyraMetrics::values.menuSpacing), tileWidth,
-                         LyraMetrics::values.menuRowHeight};
+  const auto& m = LyraMetrics::values;
+  const int rowStep = m.menuRowHeight + m.menuSpacing;
+  // Whole rows that fit in the rect; the rest scroll into view behind the
+  // selection (BaseTheme::scrollWindowStart).
+  const int visible = std::max(1, (rect.height + m.menuSpacing) / rowStep);
+  const int first = scrollWindowStart(buttonCount, visible, selectedIndex);
+
+  if (buttonCount > visible) {
+    // Same scroll bar as drawList, in the right margin beside the tiles.
+    const int trackHeight = visible * rowStep - m.menuSpacing;
+    const int thumbHeight = std::max(10, (trackHeight * visible) / buttonCount);
+    const int thumbY = rect.y + ((trackHeight - thumbHeight) * first) / (buttonCount - visible);
+    const int barX = rect.x + rect.width - m.scrollBarRightOffset;
+    renderer.drawLine(barX, rect.y, barX, rect.y + trackHeight, true);
+    renderer.fillRect(barX - m.scrollBarWidth, thumbY, m.scrollBarWidth, thumbHeight, true);
+  }
+
+  for (int i = first; i < buttonCount && i < first + visible; ++i) {
+    int tileWidth = rect.width - m.contentSidePadding * 2;
+    Rect tileRect = Rect{rect.x + m.contentSidePadding, rect.y + (i - first) * rowStep, tileWidth, m.menuRowHeight};
 
     const bool selected = selectedIndex == i;
 

@@ -3,6 +3,7 @@
 #include <vector>
 
 #include "./FileBrowserActivity.h"
+#include "Features.h"
 #include "activities/Activity.h"
 #include "util/ButtonNavigator.h"
 
@@ -41,10 +42,14 @@ class HomeActivity final : public Activity {
     if (hasOpdsUrl) ++i;
     if (item == HomeMenuItem::FILE_TRANSFER) return i;
     ++i;
+#if CROSSPOINT_FEATURE_DASHBOARD_ANY
     if (item == HomeMenuItem::DASHBOARD) return i;
     ++i;
+#endif
+#if CROSSPOINT_FEATURE_LUA
     if (item == HomeMenuItem::SCRIPTS) return i;
     ++i;
+#endif
     if (item == HomeMenuItem::TEXT_EDITOR) return i;
     ++i;
     if (item == HomeMenuItem::SETTINGS_MENU) return i;
@@ -58,8 +63,12 @@ class HomeActivity final : public Activity {
     if (idx == i++) return HomeMenuItem::RECENTS;
     if (hasOpdsUrl && idx == i++) return HomeMenuItem::OPDS_BROWSER;
     if (idx == i++) return HomeMenuItem::FILE_TRANSFER;
+#if CROSSPOINT_FEATURE_DASHBOARD_ANY
     if (idx == i++) return HomeMenuItem::DASHBOARD;
+#endif
+#if CROSSPOINT_FEATURE_LUA
     if (idx == i++) return HomeMenuItem::SCRIPTS;
+#endif
     if (idx == i++) return HomeMenuItem::TEXT_EDITOR;
     if (idx == i) return HomeMenuItem::SETTINGS_MENU;
     return HomeMenuItem::NONE;

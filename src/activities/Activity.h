@@ -45,13 +45,21 @@ class Activity {
   virtual bool preventAutoSleep() { return false; }
   virtual bool isReaderActivity() const { return false; }
   virtual bool isDashboardActivity() const { return false; }
-  // True if this activity needs the BLE stack resident (beyond the readers, which are
-  // covered by isReaderActivity()). The Bluetooth settings screen overrides this so
-  // pairing/scanning works there. Everywhere else BLE is torn down to free heap.
+  // True for screens where the user has explicitly asked for Bluetooth right now
+  // (the Bluetooth settings screen, an open text field). The lifecycle starts the
+  // stack behind a lower heap floor there, since no reader build/render headroom
+  // is needed. BLE is otherwise resident on every screen while enabled (see
+  // ActivityManager::bluetoothShouldBeActive), so this no longer gates residency.
   virtual bool keepsBluetoothAlive() const { return false; }
   // True while the current activity is doing heap-heavy work that must finish
   // before the BLE stack (~52 KB) may start.
   virtual bool deferBluetoothStart() const { return false; }
+  // True for activities during which the BLE stack must stay down even though
+  // Bluetooth is enabled: the sleep transition (the stack is torn down before
+  // deep sleep and must not be restarted while the sleep screen renders).
+  // WiFi-using activities do not need this: they call bleinput::stop() and
+  // bring WiFi up in the same call, and the lifecycle's WiFi gate holds it down.
+  virtual bool suspendsBluetooth() const { return false; }
   virtual ScreenshotInfo getScreenshotInfo() const { return {}; }
 
   // Start a new activity without destroying the current one

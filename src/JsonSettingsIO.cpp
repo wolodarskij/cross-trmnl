@@ -10,6 +10,7 @@
 #include <iterator>
 #include <string>
 
+#include "BleKeyboardLayouts.h"
 #include "BookmarkEntry.h"
 #include "CrossPointSettings.h"
 #include "CrossPointState.h"
@@ -157,6 +158,8 @@ bool JsonSettingsIO::saveSettings(const CrossPointSettings& s, const char* path)
     object["v"] = entry.keyValue;
     object["b"] = entry.button;
   }
+  doc["bleKeyboardLayout"] = s.bleKeyboardLayout;
+  doc["bleHideOnScreenKeyboard"] = s.bleHideOnScreenKeyboard;
   // Font family — uses dynamic getter/setter in SettingsList so the generic loop skips it.
   doc["fontFamily"] = s.fontFamily;
   // SD card font family name — not in SettingsList, save manually
@@ -268,6 +271,26 @@ bool JsonSettingsIO::loadSettings(CrossPointSettings& s, const char* json, bool*
       s.bleKeyMap[slot].keyValue = object["v"] | (uint8_t)0;
       s.bleKeyMap[slot].button = button;
       ++slot;
+    }
+  }
+  {
+    // Unknown or hand-edited ids fall back to US rather than to a dangling lookup.
+    const char* layoutId = doc["bleKeyboardLayout"] | "us";
+    if (!blelayout::find(layoutId)) layoutId = "us";
+    strncpy(s.bleKeyboardLayout, layoutId, sizeof(s.bleKeyboardLayout) - 1);
+    s.bleKeyboardLayout[sizeof(s.bleKeyboardLayout) - 1] = '\0';
+  }
+  s.bleHideOnScreenKeyboard = clamp(doc["bleHideOnScreenKeyboard"] | (uint8_t)0, 2, 0);
+
+  // Migration: the screen-set address used to be its own key. The server now
+  // answers both screens.json and dashboard.bmp at one address, so fold it into
+  // dashboardUrl when that is still empty, and drop the old key on the next save.
+  if (s.dashboardUrl[0] == '\0') {
+    const char* legacySetUrl = doc["dashboardSetUrl"] | "";
+    if (legacySetUrl[0] != '\0') {
+      strncpy(s.dashboardUrl, legacySetUrl, sizeof(s.dashboardUrl) - 1);
+      s.dashboardUrl[sizeof(s.dashboardUrl) - 1] = '\0';
+      if (needsResave) *needsResave = true;
     }
   }
 

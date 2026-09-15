@@ -5,18 +5,23 @@
 
 #include <algorithm>
 
+#include "Features.h"
 #include "OpdsServerStore.h"
 #include "boot_sleep/BootActivity.h"
 #include "boot_sleep/SleepActivity.h"
 #include "browser/OpdsBookBrowserActivity.h"
+#if CROSSPOINT_FEATURE_DASHBOARD_ANY
 #include "dashboard/DashboardActivity.h"
-#include "scripts/ScriptBrowserActivity.h"
+#endif
 #include "home/CrashActivity.h"
 #include "home/FileBrowserActivity.h"
 #include "home/HomeActivity.h"
 #include "home/RecentBooksActivity.h"
 #include "network/CrossPointWebServerActivity.h"
 #include "reader/ReaderActivity.h"
+#if CROSSPOINT_FEATURE_LUA
+#include "scripts/ScriptBrowserActivity.h"
+#endif
 #include "settings/OpdsServerListActivity.h"
 #include "settings/SettingsActivity.h"
 #include "util/FullScreenMessageActivity.h"
@@ -179,10 +184,16 @@ void ActivityManager::goToFileTransfer() {
 
 void ActivityManager::goToSettings() { replaceActivity(std::make_unique<SettingsActivity>(renderer, mappedInput)); }
 
-void ActivityManager::goToDashboard() { replaceActivity(std::make_unique<DashboardActivity>(renderer, mappedInput)); }
+void ActivityManager::goToDashboard() {
+#if CROSSPOINT_FEATURE_DASHBOARD_ANY
+  replaceActivity(std::make_unique<DashboardActivity>(renderer, mappedInput));
+#endif
+}
 
 void ActivityManager::goToScripts() {
+#if CROSSPOINT_FEATURE_LUA
   replaceActivity(std::make_unique<ScriptBrowserActivity>(renderer, mappedInput));
+#endif
 }
 
 void ActivityManager::goToFileBrowser(std::string path) {
@@ -275,10 +286,13 @@ bool ActivityManager::currentKeepsBluetoothAlive() const {
 }
 
 bool ActivityManager::bluetoothShouldBeActive() const {
-  const auto wants = [](const auto& activity) {
-    return activity && (activity->isReaderActivity() || activity->keepsBluetoothAlive());
-  };
-  return std::any_of(stackActivities.begin(), stackActivities.end(), wants) || wants(currentActivity);
+  // A BLE keyboard or remote drives every screen (home, browser, settings, reader),
+  // so the stack stays resident whenever Bluetooth is enabled and WiFi is off.
+  // Only an activity that explicitly suspends it (the sleep transition) keeps it
+  // down; heap pressure is handled by the lifecycle's start floors and by the
+  // reader shedding the stack itself when a chapter build needs the RAM.
+  const auto suspends = [](const auto& activity) { return activity && activity->suspendsBluetooth(); };
+  return !(std::any_of(stackActivities.begin(), stackActivities.end(), suspends) || suspends(currentActivity));
 }
 
 bool ActivityManager::bluetoothStartDeferred() const {

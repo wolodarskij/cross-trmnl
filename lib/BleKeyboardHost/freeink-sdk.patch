@@ -1,0 +1,180 @@
+diff --git a/libs/network/BleKeyboardHost/src/BleKeyboardHost.cpp b/libs/network/BleKeyboardHost/src/BleKeyboardHost.cpp
+index 2d48259..fb7caa1 100644
+--- a/libs/network/BleKeyboardHost/src/BleKeyboardHost.cpp
++++ b/libs/network/BleKeyboardHost/src/BleKeyboardHost.cpp
+@@ -80,13 +80,12 @@ volatile uint32_t g_lastReportMs = 0;  // millis() of the last HID notification
+ BleKeyboardHost& self() { return BleKeyboardHost::getInstance(); }
+ 
+ // Scan a HID Report Map descriptor for Usage Page (0x05 nn) items and note whether
+-// a keyboard (0x07) or consumer (0x0C) page is present, plus a heuristic byte index
+-// where the active code tends to live (keyboard reports: byte[2]; compact consumer
+-// reports: byte[1]). This is a hint, not a full descriptor parse.
++// a keyboard (0x07) or consumer (0x0C) page is present. Accumulates (ORs) into the
++// hint flags so a device that splits its reports across several HID service
++// instances is seen whole; setupHid() resets the flags and derives the byte index
++// (keyboard reports: byte[2]; compact consumer reports: byte[1]) afterwards.
++// This is a hint, not a full descriptor parse.
+ void parseReportMapHints(const uint8_t* map, size_t len) {
+-  g_hasKeyboardPage = false;
+-  g_hasConsumerPage = false;
+-  g_preferredByteIndex = 0xFF;
+   if (!map || len < 2) return;
+   for (size_t i = 0; i + 1 < len; ++i) {
+     if (map[i] == 0x05) {  // Usage Page (1-byte value follows)
+@@ -94,8 +93,6 @@ void parseReportMapHints(const uint8_t* map, size_t len) {
+       else if (map[i + 1] == 0x0C) g_hasConsumerPage = true;
+     }
+   }
+-  if (g_hasKeyboardPage) g_preferredByteIndex = 2;
+-  else if (g_hasConsumerPage) g_preferredByteIndex = 1;
+ }
+ 
+ // Pick a representative "primary" code from a report that the standard keyboard
+@@ -149,51 +146,95 @@ void onHidNotify(NimBLERemoteCharacteristic*, uint8_t* data, size_t len, bool) {
+ }
+ 
+ bool setupHid(NimBLEClient* client) {
+-  NimBLERemoteService* hid = client->getService(NimBLEUUID(kHidService));
+-  if (!hid) return false;
+-
+-  // Prefer Report Protocol so we get full reports (and report ids) like a host.
+-  NimBLERemoteCharacteristic* proto = hid->getCharacteristic(NimBLEUUID(kCharProtocolMode));
+-  if (proto && proto->canWrite()) {
+-    uint8_t mode = 1;  // 1 = Report Protocol, 0 = Boot Protocol
+-    proto->writeValue(&mode, 1, false);
+-  }
+-
+-  // Parse the HID Report Map for usage-page / byte-offset hints, so non-keyboard
+-  // page-turner remotes can be decoded by the generic fallback in onReportIngest.
+   g_hasKeyboardPage = false;
+   g_hasConsumerPage = false;
+   g_preferredByteIndex = 0xFF;
+   g_lastGenericCode = 0;
+-  if (NimBLERemoteCharacteristic* rmap = hid->getCharacteristic(NimBLEUUID(kCharReportMap))) {
+-    if (rmap->canRead()) {
+-      NimBLEAttValue v = rmap->readValue();
+-      parseReportMapHints(v.data(), v.size());
++
++  // A device may expose more than one HID service instance (keyboard keys in
++  // one, consumer/mouse in another - 8BitDo and some other combo keyboards do).
++  // NimBLE's getService() returns only the first instance, which is not
++  // necessarily the one carrying the keys, so every instance is set up.
++  const std::vector<NimBLERemoteService*>& services = client->getServices(true);
++  bool anyHid = false;
++  bool subscribed = false;
++  for (NimBLERemoteService* hid : services) {
++    if (!hid || hid->getUUID() != NimBLEUUID(kHidService)) continue;
++    anyHid = true;
++
++    // Prefer Report Protocol so we get full reports (and report ids) like a host.
++    NimBLERemoteCharacteristic* proto = hid->getCharacteristic(NimBLEUUID(kCharProtocolMode));
++    if (proto && proto->canWrite()) {
++      uint8_t mode = 1;  // 1 = Report Protocol, 0 = Boot Protocol
++      proto->writeValue(&mode, 1, false);
++    }
++
++    // Parse the HID Report Map for usage-page / byte-offset hints, so non-keyboard
++    // page-turner remotes can be decoded by the generic fallback in onReportIngest.
++    if (NimBLERemoteCharacteristic* rmap = hid->getCharacteristic(NimBLEUUID(kCharReportMap))) {
++      if (rmap->canRead()) {
++        NimBLEAttValue v = rmap->readValue();
++        parseReportMapHints(v.data(), v.size());
+ #if FREEINK_BLE_HID_REPORT_DEBUG
+-      Serial.printf("[BleHid] report map: kbd=%d consumer=%d preferredByte=%d len=%u\n", g_hasKeyboardPage,
+-                    g_hasConsumerPage, (int)g_preferredByteIndex, (unsigned)v.size());
++        Serial.printf("[BleHid] report map len=%u kbd=%d consumer=%d\n", (unsigned)v.size(), g_hasKeyboardPage,
++                      g_hasConsumerPage);
+ #endif
++      }
+     }
+-  }
+ 
+-  bool subscribed = false;
+-  const std::vector<NimBLERemoteCharacteristic*>& chars = hid->getCharacteristics(true);
+-  for (NimBLERemoteCharacteristic* c : chars) {
+-    if (!c) continue;
+-    if (c->getUUID() != NimBLEUUID(kCharReport) || !c->canNotify()) continue;
+-    // Report Reference descriptor (0x2908) byte[1] is the report type: 1=Input.
+-    bool isInput = true;
+-    NimBLERemoteDescriptor* ref = c->getDescriptor(NimBLEUUID(kDescReportReference));
+-    if (ref) {
+-      NimBLEAttValue v = ref->readValue();
+-      if (v.size() >= 2 && v[1] != 0x01) isInput = false;
++    const std::vector<NimBLERemoteCharacteristic*>& chars = hid->getCharacteristics(true);
++    for (NimBLERemoteCharacteristic* c : chars) {
++      if (!c) continue;
++      if (c->getUUID() != NimBLEUUID(kCharReport) || !c->canNotify()) continue;
++      // Report Reference descriptor (0x2908): byte[0] report id, byte[1] type (1 = Input).
++      // A missing or short descriptor counts as Input: subscribing to an output or
++      // feature report by mistake costs nothing, missing the input one costs the keyboard.
++      bool isInput = true;
++      uint8_t reportId = 0;
++      NimBLERemoteDescriptor* ref = c->getDescriptor(NimBLEUUID(kDescReportReference));
++      if (ref) {
++        NimBLEAttValue v = ref->readValue();
++        if (v.size() >= 2) {
++          reportId = v[0];
++          if (v[1] != 0x01) isInput = false;
++        }
++      }
++      if (!isInput) continue;
++      const bool ok = c->subscribe(true, onHidNotify);
++      if (ok) subscribed = true;
++#if FREEINK_BLE_HID_REPORT_DEBUG
++      Serial.printf("[BleHid] input report id=%u handle=%u subscribe=%s\n", reportId, c->getHandle(),
++                    ok ? "ok" : "FAILED");
++#else
++      (void)reportId;
++#endif
+     }
+-    if (isInput && c->subscribe(true, onHidNotify)) subscribed = true;
+   }
++  if (!anyHid) return false;
++
++  if (g_hasKeyboardPage) g_preferredByteIndex = 2;
++  else if (g_hasConsumerPage) g_preferredByteIndex = 1;
+ 
+-  if (!subscribed) {  // fallback: boot keyboard input report
+-    NimBLERemoteCharacteristic* boot = hid->getCharacteristic(NimBLEUUID(kCharBootKbdInput));
+-    if (boot && boot->canNotify() && boot->subscribe(true, onHidNotify)) subscribed = true;
++  if (!subscribed) {
++    // No Report-protocol input characteristic could be subscribed: fall back to
++    // the boot keyboard input report. That report is only sent while the device
++    // is in Boot Protocol mode, so switch it over - subscribing alone yields
++    // a connected keyboard that never delivers a key.
++    for (NimBLERemoteService* hid : services) {
++      if (!hid || hid->getUUID() != NimBLEUUID(kHidService)) continue;
++      NimBLERemoteCharacteristic* boot = hid->getCharacteristic(NimBLEUUID(kCharBootKbdInput));
++      if (!boot || !boot->canNotify() || !boot->subscribe(true, onHidNotify)) continue;
++      subscribed = true;
++      NimBLERemoteCharacteristic* proto = hid->getCharacteristic(NimBLEUUID(kCharProtocolMode));
++      if (proto && proto->canWrite()) {
++        uint8_t mode = 0;  // Boot Protocol
++        proto->writeValue(&mode, 1, false);
++      }
++#if FREEINK_BLE_HID_REPORT_DEBUG
++      Serial.println("[BleHid] no Report-protocol input report; using boot keyboard report");
++#endif
++      break;
++    }
+   }
+   return subscribed;
+ }
+@@ -679,11 +720,14 @@ void BleKeyboardHost::onReportIngest(const uint8_t* data, size_t len) {
+   }
+ #endif
+ 
+-  // Normalize: strip a leading report id (len 9). Boot/report-protocol keyboard
+-  // reports are [mod][reserved][k0..k5] (8 bytes) or a compact [mod][k0..k5] (7).
++  // Normalize: strip a leading report id. Boot/report-protocol keyboard reports
++  // are [mod][reserved][k0..k5] (8 bytes) or a compact [mod][k0..k5] (7); with a
++  // report id in front the common case is 9 bytes. Longer reports (padding, or
++  // extra bytes after the six key slots) show the same shape when prefixed: a
++  // non-zero id at [0] and the reserved zero byte at [2].
+   const uint8_t* p = data;
+   size_t n = len;
+-  if (n == 9) {
++  if (n == 9 || (n > 9 && p[0] != 0 && p[2] == 0)) {
+     p += 1;
+     n -= 1;
+   }

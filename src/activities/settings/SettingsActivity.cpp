@@ -12,6 +12,7 @@
 #include "ButtonRemapActivity.h"
 #include "ClearCacheActivity.h"
 #include "CrossPointSettings.h"
+#include "Features.h"
 #include "FontDownloadActivity.h"
 #include "FontSelectionActivity.h"
 #include "KOReaderSettingsActivity.h"
@@ -32,6 +33,30 @@
 const StrId SettingsActivity::categoryNames[categoryCount] = {StrId::STR_CAT_DISPLAY, StrId::STR_CAT_READER,
                                                               StrId::STR_CAT_CONTROLS, StrId::STR_CAT_SYSTEM};
 
+namespace {
+// Settings whose feature is compiled out (Features.h) stay in SettingsList so
+// the settings file round-trips between build variants, but there is nothing
+// on the device they could affect, so they are kept off the screen.
+bool settingCompiledIn(const SettingInfo& setting) {
+  if (!setting.key) return true;
+  const char* key = setting.key;
+#if !CROSSPOINT_FEATURE_DASHBOARD
+  if (strcmp(key, "dashboardUrl") == 0) return false;
+#endif
+#if !CROSSPOINT_FEATURE_TRMNL
+  if (strcmp(key, "trmnlUrl") == 0 || strcmp(key, "trmnlApiKey") == 0) return false;
+#endif
+#if !(CROSSPOINT_FEATURE_DASHBOARD && CROSSPOINT_FEATURE_TRMNL)
+  if (strcmp(key, "dashboardSource") == 0) return false;  // one source: nothing to choose
+#endif
+#if !CROSSPOINT_FEATURE_LUA
+  if (strncmp(key, "script", 6) == 0) return false;
+#endif
+  (void)key;
+  return true;
+}
+}  // namespace
+
 void SettingsActivity::rebuildSettingsLists() {
   displaySettings.clear();
   readerSettings.clear();
@@ -44,6 +69,7 @@ void SettingsActivity::rebuildSettingsLists() {
 
   for (auto& setting : getSettingsList(&sdFontSystem.registry())) {
     if (setting.category == StrId::STR_NONE_OPT) continue;
+    if (!settingCompiledIn(setting)) continue;
     if (setting.category == StrId::STR_CAT_DISPLAY) {
       displaySettings.push_back(setting);
     } else if (setting.category == StrId::STR_CAT_READER) {
@@ -62,12 +88,13 @@ void SettingsActivity::rebuildSettingsLists() {
   // Append device-only ACTION items
   controlsSettings.insert(controlsSettings.begin(),
                           SettingInfo::Action(StrId::STR_REMAP_FRONT_BUTTONS, SettingAction::RemapFrontButtons));
-#if defined(FREEINK_CAP_BLE_HID_HOST) && FREEINK_CAP_BLE_HID_HOST
-  // Omitted in builds without the BLE capability (slim): BleHid links stubs there,
-  // so the screen would scan forever and never pair.
-  controlsSettings.push_back(SettingInfo::Action(StrId::STR_BLUETOOTH, SettingAction::Bluetooth));
-#endif
   systemSettings.push_back(SettingInfo::Action(StrId::STR_WIFI_NETWORKS, SettingAction::Network));
+#if defined(FREEINK_CAP_BLE_HID_HOST) && FREEINK_CAP_BLE_HID_HOST
+  // Bluetooth sits with the other connectivity entries in System. Omitted in
+  // builds without the BLE capability (slim): BleHid links stubs there, so the
+  // screen would scan forever and never pair.
+  systemSettings.push_back(SettingInfo::Action(StrId::STR_BLUETOOTH, SettingAction::Bluetooth));
+#endif
   systemSettings.push_back(SettingInfo::Action(StrId::STR_KOREADER_SYNC, SettingAction::KOReaderSync));
   systemSettings.push_back(SettingInfo::Action(StrId::STR_OPDS_SERVERS, SettingAction::OPDSBrowser));
   systemSettings.push_back(SettingInfo::Action(StrId::STR_CLEAR_READING_CACHE, SettingAction::ClearCache));
@@ -271,18 +298,17 @@ void SettingsActivity::toggleCurrentSetting() {
     // ://, snippets etc.) is the right default.
     char* strPtr = (char*)&SETTINGS + setting.stringOffset;
     const size_t maxLen = setting.stringMaxLen;
-    startActivityForResult(
-        std::make_unique<KeyboardEntryActivity>(renderer, mappedInput, I18N.get(setting.nameId), strPtr, maxLen - 1,
-                                                InputType::Url),
-        [this, strPtr, maxLen](const ActivityResult& result) {
-          if (!result.isCancelled) {
-            const auto& kb = std::get<KeyboardResult>(result.data);
-            strncpy(strPtr, kb.text.c_str(), maxLen - 1);
-            strPtr[maxLen - 1] = '\0';
-            SETTINGS.saveToFile();
-          }
-          rebuildSettingsLists();
-        });
+    startActivityForResult(std::make_unique<KeyboardEntryActivity>(renderer, mappedInput, I18N.get(setting.nameId),
+                                                                   strPtr, maxLen - 1, InputType::Url),
+                           [this, strPtr, maxLen](const ActivityResult& result) {
+                             if (!result.isCancelled) {
+                               const auto& kb = std::get<KeyboardResult>(result.data);
+                               strncpy(strPtr, kb.text.c_str(), maxLen - 1);
+                               strPtr[maxLen - 1] = '\0';
+                               SETTINGS.saveToFile();
+                             }
+                             rebuildSettingsLists();
+                           });
     return;
   } else if (setting.type == SettingType::ACTION) {
     auto resultHandler = [this](const ActivityResult&) { SETTINGS.saveToFile(); };

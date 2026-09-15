@@ -43,11 +43,15 @@ CrossPoint README, preserved verbatim).
   script, memory is capped, and errors are caught. See
   [docs/SCRIPTING.md](./docs/SCRIPTING.md).
 - **Bluetooth keyboards & page-turner remotes** — pair BLE HID devices
-  (Settings → Controls → Bluetooth), turn pages from a remote, navigate every
-  menu and type into every text field from a real keyboard.
+  (Settings → System → Bluetooth), turn pages from a remote, navigate every
+  menu and type into every text field from a real keyboard, in the keyboard's
+  own layout (15 built in: US, UK, German, French, Spanish, Italian,
+  Portuguese, Brazilian, Swedish/Finnish, Danish, Russian, Ukrainian, Polish,
+  Czech, Turkish).
 - **Text editor** on the home menu — browse, create, and edit `.txt`/`.md`
   notes on the SD card with the on-screen keyboard or a connected BLE
-  keyboard.
+  keyboard. A new file opens straight into the line editor; with a keyboard
+  connected the page is typed into directly and Confirm saves.
 
 **The complete change list vs. upstream is in [FEATURES.md](./FEATURES.md).**
 
@@ -85,6 +89,21 @@ build.bat default upload  build, then flash over USB
 build.bat slim clean      any env, any pio target
 ```
 
+Every fork feature is a build option. All are on by default; drop the ones
+you do not want with any of these flags, in any position:
+
+```
+build.bat default --no-lua                 no Lua scripts / Scripts menu
+build.bat default --no-bluetooth           no BLE keyboards or remotes
+build.bat default --no-dashboard --no-trmnl   no dashboard at all
+```
+
+`--no-dashboard` removes the x4-dashboard-server source, `--no-trmnl` the
+TRMNL one; with both gone the Dashboard menu entry and sleep modes go too.
+Without `build.bat`, export `CROSSPOINT_FEATURE_<BLUETOOTH|DASHBOARD|TRMNL|LUA>=0`
+before `pio run`. Settings for a feature that is compiled out are kept in the
+settings file, so switching variants does not lose them.
+
 Then install it either way:
 
 - **SD Card Firmware Update** (if the device already runs CrossPoint or
@@ -119,19 +138,36 @@ you will see.
 
 ### Bluetooth keyboard / remote
 
-1. Settings → Controls → **Bluetooth** → toggle Bluetooth on → **Scan & Pair**
-   and select your device (bonds persist; it auto-reconnects afterwards).
+1. Settings → System → **Bluetooth** → toggle Bluetooth on → **Scan & Pair**
+   and select your device (bonds persist; it auto-reconnects afterwards, on
+   every screen — home, browser, settings and reader alike). **Paired
+   Devices** marks the live link as *Connected*.
 2. A keyboard works immediately: arrows/Enter/Escape navigate menus,
    PageUp/PageDown turn pages, and typing goes into whatever text field is
    open (WiFi passwords, search, settings, the text editor). Remotes map
    their buttons via **Map Remote Buttons**.
-3. While reading, toggle Bluetooth from the reader menu; a status-bar icon
+3. Pick the keyboard's language under **Keyboard layout** so keys type what
+   is printed on them (AltGr levels and Caps Lock included). **Hide on-screen
+   keyboard** drops the on-screen keys from text fields while a keyboard is
+   connected: type on the keyboard, Enter/OK confirms, Esc/Back cancels, and
+   the field grows the on-screen keys back the moment the keyboard drops off.
+4. While reading, toggle Bluetooth from the reader menu; a status-bar icon
    shows when a device is connected.
 
 Notes: BLE only — the ESP32-C3 has no Bluetooth Classic, so Classic-only
 devices can't connect. Bluetooth is suspended whenever WiFi is in use (one
 radio, and the two stacks don't fit in RAM together) and while it is off it
-costs zero heap.
+costs zero heap. Adding a keyboard layout is one table in
+`src/BleKeyboardLayouts.cpp` (only the keys that differ from US or from a
+parent layout) plus a name in `english.yaml`; unused layouts live in flash
+and cost no RAM.
+
+The BLE host itself is a project copy of the FreeInk SDK's `BleKeyboardHost`
+in `lib/BleKeyboardHost`, carrying HID-report fixes the SDK does not have yet
+(keyboards with several HID service instances, e.g. the 8BitDo Retro). The
+`freeink-sdk` submodule is never modified; `lib/BleKeyboardHost/UPSTREAM.md`
+records the origin commit and the patch, so the copy can be re-synced with
+upstream or the fix sent there.
 
 ### Text editor
 

@@ -18,6 +18,12 @@ void utf8TruncateChars(std::string& str, size_t numChars);
 // stored in NFD (e.g. some EPUB chapter titles) otherwise renders broken.
 std::string utf8ComposeNfc(const std::string& in);
 
+// Byte offset of the start of the codepoint that ends at `pos` (0 when pos is 0).
+// Steps backwards over continuation bytes; safe on any byte offset.
+size_t utf8PrevCharStart(const std::string& str, size_t pos);
+// Byte offset just past the codepoint that starts at `pos` (str.size() at the end).
+size_t utf8NextCharEnd(const std::string& str, size_t pos);
+
 // Truncate a raw char buffer to the last complete UTF-8 codepoint boundary.
 // Returns the new length (<= len). If the buffer ends mid-sequence, the
 // incomplete trailing bytes are excluded.

@@ -178,3 +178,18 @@ void utf8TruncateChars(std::string& str, const size_t numChars) {
     utf8RemoveLastChar(str);
   }
 }
+
+size_t utf8PrevCharStart(const std::string& str, size_t pos) {
+  if (pos == 0) return 0;
+  if (pos > str.size()) pos = str.size();
+  pos--;
+  while (pos > 0 && (static_cast<unsigned char>(str[pos]) & 0xC0) == 0x80) pos--;
+  return pos;
+}
+
+size_t utf8NextCharEnd(const std::string& str, size_t pos) {
+  if (pos >= str.size()) return str.size();
+  pos++;
+  while (pos < str.size() && (static_cast<unsigned char>(str[pos]) & 0xC0) == 0x80) pos++;
+  return pos;
+}

@@ -8,6 +8,7 @@
 
 #include <cstdio>
 
+#include "BleInput.h"
 #include "CrossPointSettings.h"
 #include "MappedInputManager.h"
 #include "activities/util/ConfirmationActivity.h"
@@ -56,8 +57,18 @@ void TextEditorActivity::onEnter() {
   if (loadError == LoadError::None) {
     mappedInput.setBleTextSink(true);
   }
+  bleConnectedLastFrame = BleHid.isConnected();
   requestUpdate();
+
+  // A brand-new (empty) file is opened to be typed into, so go straight to the
+  // line editor instead of showing an empty page that first wants "Edit". With
+  // a BLE keyboard the page itself takes the typing, so nothing to open.
+  if (loadError == LoadError::None && totalBytes == 0 && !typesDirectly()) {
+    openLineEditor();
+  }
 }
+
+bool TextEditorActivity::typesDirectly() const { return BleHid.isConnected(); }
 
 void TextEditorActivity::onExit() {
   mappedInput.setBleTextSink(false);
@@ -134,8 +145,7 @@ bool TextEditorActivity::loadFile() {
   // Free heap must cover the line vector, the text itself, and working margin for
   // edits, the KeyboardEntryActivity round-trip, and the save path. maxAlloc must
   // separately cover the vector's single contiguous block.
-  if (ESP.getFreeHeap() < vectorBytes + 2 * fileSize + 24 * 1024 ||
-      ESP.getMaxAllocHeap() < vectorBytes + 4 * 1024) {
+  if (ESP.getFreeHeap() < vectorBytes + 2 * fileSize + 24 * 1024 || ESP.getMaxAllocHeap() < vectorBytes + 4 * 1024) {
     LOG_ERR("EDT", "%s: not enough heap (free=%u maxAlloc=%u need vec=%u size=%u)", filePath.c_str(),
             (unsigned)ESP.getFreeHeap(), (unsigned)ESP.getMaxAllocHeap(), (unsigned)vectorBytes, (unsigned)fileSize);
     loadError = LoadError::NoHeap;
@@ -464,6 +474,20 @@ void TextEditorActivity::insertCharAtCaret(const char c) {
   dirty = true;
 }
 
+void TextEditorActivity::insertUtf8AtCaret(const char* utf8) {
+  const size_t n = strlen(utf8);
+  if (n == 0) return;
+  if (savedSizeEstimate() + n > kMaxEditableBytes) {
+    setBanner(tr(STR_EDITOR_FULL));
+    return;
+  }
+  RenderLock lock;
+  lines[caretLine].insert(caretCol, utf8, n);
+  caretCol += n;
+  totalBytes += n;
+  dirty = true;
+}
+
 void TextEditorActivity::backspaceAtCaret() {
   RenderLock lock;
   if (caretCol > 0) {
@@ -518,27 +542,26 @@ void TextEditorActivity::openLineEditor() {
   // The line may grow by whatever capacity the rest of the document leaves free.
   const size_t others = totalBytes - lines[caretLine].size();
   const size_t maxLen = kMaxEditableBytes > others ? kMaxEditableBytes - others : 0;
-  startActivityForResult(
-      std::make_unique<KeyboardEntryActivity>(renderer, mappedInput, tr(STR_EDITOR_EDIT_LINE), lines[caretLine],
-                                              maxLen),
-      [this](const ActivityResult& result) {
-        // KeyboardEntryActivity disabled the BLE text sink in its onExit (which
-        // ActivityManager runs BEFORE this handler); re-arm it for the document.
-        mappedInput.setBleTextSink(true);
-        if (!result.isCancelled) {
-          const auto& newText = std::get<KeyboardResult>(result.data).text;
-          if (newText != lines[caretLine]) {
-            RenderLock lock;
-            totalBytes = totalBytes - lines[caretLine].size() + newText.size();
-            lines[caretLine] = newText;
-            dirty = true;
-          }
-        }
-        clampCaretCol();
-        clampViewport();
-        ensureCaretVisible();
-        requestUpdate();
-      });
+  startActivityForResult(std::make_unique<KeyboardEntryActivity>(renderer, mappedInput, tr(STR_EDITOR_EDIT_LINE),
+                                                                 lines[caretLine], maxLen),
+                         [this](const ActivityResult& result) {
+                           // KeyboardEntryActivity disabled the BLE text sink in its onExit (which
+                           // ActivityManager runs BEFORE this handler); re-arm it for the document.
+                           mappedInput.setBleTextSink(true);
+                           if (!result.isCancelled) {
+                             const auto& newText = std::get<KeyboardResult>(result.data).text;
+                             if (newText != lines[caretLine]) {
+                               RenderLock lock;
+                               totalBytes = totalBytes - lines[caretLine].size() + newText.size();
+                               lines[caretLine] = newText;
+                               dirty = true;
+                             }
+                           }
+                           clampCaretCol();
+                           clampViewport();
+                           ensureCaretVisible();
+                           requestUpdate();
+                         });
 }
 
 void TextEditorActivity::openOptionsPopup() {
@@ -635,18 +658,19 @@ bool TextEditorActivity::drainBleKeys() {
   freeink::KeyEvent ev;
   bool changed = false;
   while (mappedInput.popBleTextKey(ev)) {
-    // Ctrl+S saves.
-    if ((ev.mods & kCtrlMods) != 0 && (ev.ch == 's' || ev.ch == 'S')) {
+    // Ctrl+S saves. Matched on the physical S key so it works on every layout
+    // (on a Cyrillic keyboard that key types ы).
+    if ((ev.mods & kCtrlMods) != 0 && ev.keycode == blelayout::hid::S) {
       setBanner(saveFile() ? tr(STR_EDITOR_SAVED) : tr(STR_EDITOR_SAVE_FAILED));
       changed = true;
       continue;
     }
-    // Any other Ctrl/Alt/GUI chord is a shortcut we do not implement — swallow it
-    // rather than typing its letter into the document.
-    if (ev.ch != 0 && (ev.mods & kNonShiftMods) != 0) continue;
-
-    if (ev.ch != 0) {
-      insertCharAtCaret(ev.ch);
+    // Text under the selected keyboard layout. keyText() returns false for any
+    // other Ctrl/Alt/GUI chord, which then falls through to the special-key
+    // switch below and is swallowed rather than typed into the document.
+    char utf8[5];
+    if (bleinput::keyText(ev, utf8, sizeof(utf8))) {
+      insertUtf8AtCaret(utf8);
       changed = true;
       continue;
     }
@@ -778,8 +802,24 @@ void TextEditorActivity::loop() {
     const bool fire = confirmHeld && !confirmLongHandled;
     confirmHeld = false;
     confirmLongHandled = false;
-    if (fire) openLineEditor();
+    if (fire) {
+      if (typesDirectly()) {
+        // The document is already being edited from the keyboard: Confirm is
+        // Save. (The line editor stays reachable from the long-press popup.)
+        setBanner(saveFile() ? tr(STR_EDITOR_SAVED) : tr(STR_EDITOR_SAVE_FAILED));
+        requestUpdate();
+      } else {
+        openLineEditor();
+      }
+    }
     return;
+  }
+
+  // Repaint the button hints when a keyboard connects or drops off.
+  const bool bleConnected = BleHid.isConnected();
+  if (bleConnected != bleConnectedLastFrame) {
+    bleConnectedLastFrame = bleConnected;
+    requestUpdate();
   }
 
   if (mappedInput.wasReleased(MappedInputManager::Button::Back)) {
@@ -890,7 +930,8 @@ void TextEditorActivity::render(RenderLock&&) {
     GUI.drawHelpText(renderer, Rect{0, contentBottom - 20, pageWidth, 20}, banner.c_str());
   }
 
-  const auto labels = mappedInput.mapLabels(tr(STR_BACK), tr(STR_EDIT_BUTTON), tr(STR_DIR_UP), tr(STR_DIR_DOWN));
+  const char* confirmLabel = typesDirectly() ? tr(STR_EDITOR_SAVE) : tr(STR_EDIT_BUTTON);
+  const auto labels = mappedInput.mapLabels(tr(STR_BACK), confirmLabel, tr(STR_DIR_UP), tr(STR_DIR_DOWN));
   GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
 
   // Periodic ghost cleanup, matching the readers' refresh hygiene.

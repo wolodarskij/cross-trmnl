@@ -678,12 +678,25 @@ void BaseTheme::drawRecentBookCover(GfxRenderer& renderer, Rect rect, const std:
   }
 }
 
+int BaseTheme::scrollWindowStart(int itemCount, int visibleItems, int selectedIndex) {
+  if (itemCount <= visibleItems || visibleItems <= 0) return 0;
+  const int maxStart = itemCount - visibleItems;
+  return std::clamp(selectedIndex - visibleItems + 1, 0, maxStart);
+}
+
 void BaseTheme::drawButtonMenu(GfxRenderer& renderer, Rect rect, int buttonCount, int selectedIndex,
                                const std::function<std::string(int index)>& buttonLabel,
                                const std::function<UIIcon(int index)>& rowIcon) const {
-  for (int i = 0; i < buttonCount; ++i) {
-    const int tileY = BaseMetrics::values.verticalSpacing + rect.y +
-                      static_cast<int>(i) * (BaseMetrics::values.menuRowHeight + BaseMetrics::values.menuSpacing);
+  const auto& m = BaseMetrics::values;
+  const int rowStep = m.menuRowHeight + m.menuSpacing;
+  const int top = rect.y + m.verticalSpacing;
+  // Whole rows that fit between the top spacing and the bottom of the rect
+  // (the trailing gap of the last row may hang over the edge).
+  const int visible = std::max(1, (rect.height - m.verticalSpacing + m.menuSpacing) / rowStep);
+  const int first = scrollWindowStart(buttonCount, visible, selectedIndex);
+
+  for (int i = first; i < buttonCount && i < first + visible; ++i) {
+    const int tileY = top + (i - first) * rowStep;
 
     const bool selected = selectedIndex == i;
 
@@ -704,6 +717,31 @@ void BaseTheme::drawButtonMenu(GfxRenderer& renderer, Rect rect, int buttonCount
         tileY + (BaseMetrics::values.menuRowHeight - lineHeight) / 2;  // vertically centered assuming y is top of text
     // Invert text when the tile is selected, to contrast with the filled background
     renderer.drawText(UI_10_FONT_ID, textX, textY, label, selectedIndex != i);
+  }
+
+  // Overflow arrows in the side margin, right of the tiles: ^ when rows are
+  // hidden above the window, v when rows are hidden below it.
+  const bool moreAbove = first > 0;
+  const bool moreBelow = first + visible < buttonCount;
+  if (moreAbove || moreBelow) {
+    constexpr int arrowSize = 6;
+    const int centerX = rect.x + rect.width - m.contentSidePadding / 2;
+    if (moreAbove) {
+      const int arrowTop = top;
+      for (int i = 0; i < arrowSize; ++i) {
+        const int lineWidth = 1 + i * 2;
+        const int startX = centerX - i;
+        renderer.drawLine(startX, arrowTop + i, startX + lineWidth - 1, arrowTop + i);
+      }
+    }
+    if (moreBelow) {
+      const int arrowTop = top + visible * rowStep - m.menuSpacing - arrowSize;
+      for (int i = 0; i < arrowSize; ++i) {
+        const int lineWidth = 1 + (arrowSize - 1 - i) * 2;
+        const int startX = centerX - (arrowSize - 1 - i);
+        renderer.drawLine(startX, arrowTop + i, startX + lineWidth - 1, arrowTop + i);
+      }
+    }
   }
 }
 

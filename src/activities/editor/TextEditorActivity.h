@@ -95,6 +95,9 @@ class TextEditorActivity final : public Activity {
   bool confirmLongHandled = false;
   // Swallow the Confirm release that closed the options popup.
   bool popupClosing = false;
+  // BLE link state as of the last frame: the Confirm button's role (Save vs
+  // Edit line) follows it, so a keyboard coming or going repaints the hints.
+  bool bleConnectedLastFrame = false;
 
   // Transient status line ("Saved" / "Save failed").
   std::string banner;
@@ -122,12 +125,17 @@ class TextEditorActivity final : public Activity {
   // Returns false when a drained BLE key finished the activity.
   bool drainBleKeys();
   void insertCharAtCaret(char c);
+  // Insert a NUL-terminated UTF-8 sequence (one BLE keystroke) at the caret.
+  void insertUtf8AtCaret(const char* utf8);
   void backspaceAtCaret();
   void deleteAtCaret();
   void splitLineAtCaret();
   void openLineEditor();
   void openOptionsPopup();
   void requestExit();
+  // True when typing goes straight into the document (a BLE keyboard is
+  // connected), so Confirm saves instead of opening the line editor.
+  bool typesDirectly() const;
 
   // UTF-8-aware caret steps within the current line.
   static size_t prevCharStart(const std::string& line, size_t pos);
