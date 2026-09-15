@@ -30,6 +30,12 @@ cd /d "%~dp0"
 
 set "PYTHONIOENCODING=utf-8"
 set "PYTHONUTF8=1"
+REM ESP-IDF's idf_tools.py (run by the Arduino core rebuild that custom_sdkconfig
+REM triggers) aborts with "MSys/Mingw is not supported" when it sees MSYSTEM in
+REM the environment, i.e. whenever this script is launched from Git Bash. The
+REM build itself is a plain Windows toolchain, so just hide the variable.
+set "MSYSTEM="
+set "MSYSTEM_PREFIX="
 
 REM Feature switches: start from everything on, so a stale value in the caller's
 REM environment cannot silently drop a feature.

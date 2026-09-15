@@ -8,6 +8,7 @@
 
 #include "BleInput.h"
 #include "CrossPointSettings.h"
+#include "components/SimpleList.h"
 #include "components/UITheme.h"
 #include "fontIds.h"
 
@@ -154,9 +155,8 @@ void BleButtonMapActivity::render(RenderLock&&) {
     bleinput::describeKey(capturedKind, capturedValue, captured, sizeof(captured));
     GUI.drawSubHeader(renderer, Rect{0, metrics.topPadding + metrics.headerHeight, pageWidth, metrics.tabBarHeight},
                       captured);
-    GUI.drawList(
-        renderer, Rect{0, topOffset, pageWidth, contentHeight}, kFunctionCount, functionIndex,
-        [this](int i) { return std::string(I18N.get(kFunctions[i].label)); }, nullptr, nullptr, nullptr, false);
+    simplelist::draw(renderer, Rect{0, topOffset, pageWidth, contentHeight}, kFunctionCount, functionIndex,
+                     [this](int i) { return std::string(I18N.get(kFunctions[i].label)); });
   }
 
   const char* confirm = step == Step::WaitForKey ? "" : tr(STR_SELECT);

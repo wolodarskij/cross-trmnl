@@ -1,5 +1,5 @@
 diff --git a/libs/network/BleKeyboardHost/src/BleKeyboardHost.cpp b/libs/network/BleKeyboardHost/src/BleKeyboardHost.cpp
-index 2d48259..fb7caa1 100644
+index 4e66ec40..9974c80d 100644
 --- a/libs/network/BleKeyboardHost/src/BleKeyboardHost.cpp
 +++ b/libs/network/BleKeyboardHost/src/BleKeyboardHost.cpp
 @@ -80,13 +80,12 @@ volatile uint32_t g_lastReportMs = 0;  // millis() of the last HID notification
@@ -30,7 +30,7 @@ index 2d48259..fb7caa1 100644
  }
  
  // Pick a representative "primary" code from a report that the standard keyboard
-@@ -149,51 +146,95 @@ void onHidNotify(NimBLERemoteCharacteristic*, uint8_t* data, size_t len, bool) {
+@@ -153,51 +150,95 @@ void onHidNotify(NimBLERemoteCharacteristic*, uint8_t* data, size_t len, bool) {
  }
  
  bool setupHid(NimBLEClient* client) {
@@ -130,13 +130,13 @@ index 2d48259..fb7caa1 100644
 -    if (isInput && c->subscribe(true, onHidNotify)) subscribed = true;
    }
 +  if (!anyHid) return false;
-+
-+  if (g_hasKeyboardPage) g_preferredByteIndex = 2;
-+  else if (g_hasConsumerPage) g_preferredByteIndex = 1;
  
 -  if (!subscribed) {  // fallback: boot keyboard input report
 -    NimBLERemoteCharacteristic* boot = hid->getCharacteristic(NimBLEUUID(kCharBootKbdInput));
 -    if (boot && boot->canNotify() && boot->subscribe(true, onHidNotify)) subscribed = true;
++  if (g_hasKeyboardPage) g_preferredByteIndex = 2;
++  else if (g_hasConsumerPage) g_preferredByteIndex = 1;
++
 +  if (!subscribed) {
 +    // No Report-protocol input characteristic could be subscribed: fall back to
 +    // the boot keyboard input report. That report is only sent while the device
@@ -160,7 +160,7 @@ index 2d48259..fb7caa1 100644
    }
    return subscribed;
  }
-@@ -679,11 +720,14 @@ void BleKeyboardHost::onReportIngest(const uint8_t* data, size_t len) {
+@@ -694,11 +735,14 @@ void BleKeyboardHost::onReportIngest(const uint8_t* data, size_t len) {
    }
  #endif
  

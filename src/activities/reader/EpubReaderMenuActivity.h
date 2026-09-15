@@ -50,7 +50,12 @@ class EpubReaderMenuActivity final : public UiListActivity {
   // fixed-capacity array avoids any heap allocation for the row list. Labels
   // are set once in the constructor (buildMenuRowItems()); buildScreen()
   // only refreshes rows whose values reflect live state.
-  static constexpr size_t MAX_MENU_ITEMS = 16;
+  // Worst case, every conditional row present: chapter, footnotes, bookmarks,
+  // toggle-bookmark, night mode, frontlight, dictionary, orientation, auto page
+  // turn, go-to-percent, screenshot, QR, Bluetooth, home, sync, delete cache,
+  // text settings. buildScreen() indexes this array by menuItems index, so it
+  // must not be smaller than buildMenuItems() can produce.
+  static constexpr size_t MAX_MENU_ITEMS = 17;
   freeink::ui::ListItem menuRowItems[MAX_MENU_ITEMS]{};
   void buildMenuRowItems();
 

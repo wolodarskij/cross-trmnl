@@ -20,8 +20,9 @@ CrossPoint README, preserved verbatim).
   the card, with **no network access at all**. Left/Right switch screens,
   Confirm connects and downloads them, Back exits.
 - **Works without a server** — drop 480×800 BMPs into `/dashboards` on the SD
-  card and they show up alongside anything downloaded. Syncing only ever adds
-  files; it never deletes what you put there.
+  card and they show up alongside anything downloaded. Syncing adds or replaces
+  only the screens the server actually serves; other files in the folder are
+  left alone.
 - **Dashboard sleep-screen modes** — *Dashboard* (selected screen, instant
   sleep) and *Dashboard + Auto-update* (refreshes just that screen on every
   sleep).

@@ -45,31 +45,37 @@ bool WifiConnector::connectToSaved(uint32_t perNetworkTimeoutMs) {
     return true;
   }
 
-  const auto& credentials = WIFI_STORE.getCredentials();
-  if (credentials.empty()) {
+  // The store hands out credentials one at a time (by index or SSID) rather
+  // than exposing its container, so each entry is fetched as it is tried.
+  const size_t credentialCount = WIFI_STORE.getCredentialCount();
+  if (credentialCount == 0) {
     LOG_INF("WFC", "No saved WiFi credentials");
     return false;
   }
 
   // Last-connected network first: it is the most likely to be in range and
   // avoids burning the timeout budget on stale entries.
-  const std::string& lastSsid = WIFI_STORE.getLastConnectedSsid();
-  if (const auto* lastCred = lastSsid.empty() ? nullptr : WIFI_STORE.findCredential(lastSsid)) {
-    LOG_DBG("WFC", "Trying last network: %s", lastCred->ssid.c_str());
-    beginConnection(*lastCred);
-    if (waitForConnection(perNetworkTimeoutMs)) {
-      LOG_INF("WFC", "Connected to %s", lastCred->ssid.c_str());
-      return true;
+  const std::string lastSsid = WIFI_STORE.getLastConnectedSsid();
+  if (!lastSsid.empty()) {
+    if (const auto lastCred = WIFI_STORE.findCredential(lastSsid)) {
+      LOG_DBG("WFC", "Trying last network: %s", lastCred->ssid.c_str());
+      beginConnection(*lastCred);
+      if (waitForConnection(perNetworkTimeoutMs)) {
+        LOG_INF("WFC", "Connected to %s", lastCred->ssid.c_str());
+        return true;
+      }
     }
   }
 
-  for (const auto& cred : credentials) {
-    if (cred.ssid == lastSsid) continue;  // already attempted above
-    LOG_DBG("WFC", "Trying saved network: %s", cred.ssid.c_str());
-    beginConnection(cred);
+  for (size_t i = 0; i < credentialCount; i++) {
+    const auto cred = WIFI_STORE.getCredentialAt(i);
+    if (!cred) continue;
+    if (cred->ssid == lastSsid) continue;  // already attempted above
+    LOG_DBG("WFC", "Trying saved network: %s", cred->ssid.c_str());
+    beginConnection(*cred);
     if (waitForConnection(perNetworkTimeoutMs)) {
-      WIFI_STORE.setLastConnectedSsid(cred.ssid);
-      LOG_INF("WFC", "Connected to %s", cred.ssid.c_str());
+      WIFI_STORE.setLastConnectedSsid(cred->ssid);
+      LOG_INF("WFC", "Connected to %s", cred->ssid.c_str());
       return true;
     }
   }

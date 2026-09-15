@@ -83,7 +83,7 @@ void* ScriptEngine::alloc(void* ud, void* ptr, size_t osize, size_t nsize) {
 }
 
 bool ScriptEngine::begin() {
-  // Re-clamp the reserve read from settings. JsonSettingsIO already range-checks
+  // Re-clamp the reserve read from settings. CrossPointSettings::fromJson already range-checks
   // it on load, but settings.json is a plain file on a removable card: a value
   // that reaches here out of range would hand a script the heap the failure
   // screen needs to report that very failure.
@@ -113,8 +113,8 @@ bool ScriptEngine::begin() {
   memUsed_ = 0;
   memPeak_ = 0;
   freeHeapAtStart_ = freeHeap;
-  LOG_INF("LUA", "memory budget %u bytes (free heap %u, reserve %u, clamp %s)", (unsigned)memLimit_,
-          (unsigned)freeHeap, (unsigned)heapReserve_, clampName());
+  LOG_INF("LUA", "memory budget %u bytes (free heap %u, reserve %u, clamp %s)", (unsigned)memLimit_, (unsigned)freeHeap,
+          (unsigned)heapReserve_, clampName());
 
   L_ = lua_newstate(&ScriptEngine::alloc, this);
   if (!L_) {
@@ -216,13 +216,13 @@ bool ScriptEngine::runFile(const std::string& path, std::string& errorOut) {
       char detail[224];
       snprintf(detail, sizeof(detail),
                "\n\nUsed %u KB of %u KB allowed.\nFree heap at start %u KB, reserved %u KB, limit set by %s.",
-               (unsigned)((memPeak_ + 1023) / 1024), (unsigned)(memLimit_ / 1024),
-               (unsigned)(freeHeapAtStart_ / 1024), (unsigned)(heapReserve_ / 1024), clampName());
+               (unsigned)((memPeak_ + 1023) / 1024), (unsigned)(memLimit_ / 1024), (unsigned)(freeHeapAtStart_ / 1024),
+               (unsigned)(heapReserve_ / 1024), clampName());
       errorOut += detail;
     }
   }
-  LOG_INF("LUA", "%s: lua peak %u/%u bytes, free heap %u", path.c_str(),
-          (unsigned)memPeak_, (unsigned)memLimit_, (unsigned)ESP.getFreeHeap());
+  LOG_INF("LUA", "%s: lua peak %u/%u bytes, free heap %u", path.c_str(), (unsigned)memPeak_, (unsigned)memLimit_,
+          (unsigned)ESP.getFreeHeap());
   lua_pop(L_, 1);  // message handler
   return ok;
 }

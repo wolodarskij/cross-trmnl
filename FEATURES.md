@@ -56,9 +56,9 @@ Two new sleep-screen modes (Settings → Display → Sleep Screen):
   No network on the way to sleep: instant, zero battery cost.
 - **Dashboard + Auto-update** — a fresh image is fetched every time the device
   goes to sleep (power button or idle timeout), so the screen the device
-  sleeps on is always current. With a screen set this refreshes **only the
-  selected screen**: pulling the whole set here would multiply radio time by
-  the screen count for images nothing is about to draw.
+  sleeps on is always current. This refreshes **only the selected screen**:
+  pulling every screen here would multiply radio time by the screen count for
+  images nothing is about to draw.
 - Additionally, sleeping while the Dashboard viewer is open always keeps the
   dashboard visible, regardless of the configured sleep-screen mode.
 
@@ -66,13 +66,8 @@ Two new sleep-screen modes (Settings → Display → Sleep Screen):
 Each source is also a build option (`--no-dashboard`, `--no-trmnl`); with
 only one compiled in the selector disappears and that source is used.
 - **X4 dashboard server** — one `Dashboard server address` setting (the
-  server root, e.g. `192.168.1.20:8080`; scheme optional). The server decides
-  the mode: a `screens.json` manifest means a screen set, otherwise the single
-  `dashboard.bmp` is fetched into the one-slot cache at
-  `/.crosspoint/dashboard.bmp`. An address ending in `.json` or `.bmp` is used
-  as-is. The former `Dashboard URL` / `Dashboard server URL` pair and the
-  "Simple" / "Screen set" choice are gone; the old `dashboardSetUrl` value is
-  migrated on load. The screen-set side implements x4-dashboard-server's
+  server root, e.g. `192.168.1.20:8080`; scheme optional). The firmware asks
+  the server for its screens and implements x4-dashboard-server's
   [screen-list contract](https://github.com/wolodarskij/x4-dashboard-server/blob/main/docs/screens-format.md):
   - `GET {base}/screens.json` for the manifest, rejected unless `format` is
     `x4-dashboard-set`;
@@ -139,7 +134,7 @@ only one compiled in the selector disappears and that source is used.
   (`lib/BleKeyboardHost`, NimBLE central, enabled via
   `FREEINK_CAP_BLE_HID_HOST`). The copy carries HID-report fixes the submodule
   lacks; `lib/BleKeyboardHost/UPSTREAM.md` records the origin commit and the
-  diff, and the submodule itself is never modified. Uses the field-tested lifecycle from
+  diff, and the submodule itself is never modified. The lifecycle is ported from
   upstream's `feat-bluetooth` branch: scan/pair/bond UI
   (Settings → System → Bluetooth), NVS-persisted bonds with auto-reconnect,
   a per-button remap UI for remotes, an in-reader Bluetooth toggle, and a
@@ -210,11 +205,11 @@ Modified files (all changes small and localized):
 
 | File | Change |
 |---|---|
-| `src/CrossPointSettings.h` | `DASHBOARD`/`DASHBOARD_AUTOUPDATE` sleep modes, `DASHBOARD_SOURCE` enum (incl. `SCREENSET`), 4 new string settings |
+| `src/CrossPointSettings.h` | `DASHBOARD`/`DASHBOARD_AUTOUPDATE` sleep modes, `DASHBOARD_SOURCE` enum (X4, TRMNL), new string settings |
 | `src/SettingsList.h` | new settings entries; sleep-label order fix |
 | `lib/I18n/translations/english.yaml` | new UI strings (dashboard + scripts) |
 | `src/activities/boot_sleep/SleepActivity.{h,cpp}` | dashboard sleep-screen render (+ landscape), resolved image path |
-| `src/JsonSettingsIO.cpp` | persist `dashboardScreenId` in `state.json` |
+| `src/CrossPointState.cpp` | persist `dashboardScreenId` in `state.json` |
 | `src/activities/home/HomeActivity.{h,cpp}` | Dashboard + Scripts menu items |
 | `src/activities/ActivityManager.{h,cpp}` | `goToDashboard()`/`goToScripts()`, `isDashboardActivity()` |
 | `src/activities/Activity.h` | `isDashboardActivity()` virtual |
@@ -224,12 +219,10 @@ Modified files (all changes small and localized):
 
 ## Companion projects
 
-- **x4-dashboard-server** — backend for both the "Simple" and "Screen set"
-  sources: browser widget editor (text/images/weather/ICS calendar),
-  e-ink-accurate preview, 1-bit or native grayscale BMP output,
-  portrait/landscape with auto-rotation. It serves any number of screens at
-  `/screens.json` while keeping `/dashboard.bmp` for single-image clients, so
-  older firmware keeps working unchanged.
+- **x4-dashboard-server** — backend for the X4 dashboard source: browser
+  widget editor (text/images/weather/ICS calendar), e-ink-accurate preview,
+  1-bit or native grayscale BMP output, portrait/landscape with auto-rotation.
+  It serves any number of screens through `screens.json`.
 - Any **TRMNL BYOS server** — for the TRMNL source; tested against
   `usetrmnl/byos_fastapi`.
 
@@ -237,14 +230,13 @@ Modified files (all changes small and localized):
 
 1. Flash: `pio run -e default` and install `.pio/build/default/firmware.bin`
    via Settings → System → SD Card Firmware Update (or `pio run -t upload`).
-2. Settings → Display → **Dashboard source** → Simple, TRMNL or Screen set.
-3. Set the matching address: **Dashboard URL** (Simple), **TRMNL server URL**
-   (TRMNL), or **Dashboard server URL** (Screen set — the server root, not a
-   file).
-4. Home → **Dashboard**, then **Confirm** to download. Afterwards it opens
+2. Set the address: **Dashboard server address** (x4-dashboard-server root)
+   or **TRMNL server URL**. With both sources compiled in, Settings → Display
+   → **Dashboard source** chooses between them.
+3. Home → **Dashboard**, then **Confirm** to download. Afterwards it opens
    offline; **Left/Right** switch screens.
-5. Settings → Display → **Sleep Screen** → Dashboard / Dashboard +
+4. Settings → Display → **Sleep Screen** → Dashboard / Dashboard +
    Auto-update to make the selected screen the screensaver.
 
-No server? Skip steps 2–3, copy 480×800 BMPs into `/dashboards` on the card,
-and go straight to step 4 — the viewer lists whatever it finds there.
+No server? Skip step 2, copy 480×800 BMPs into `/dashboards` on the card,
+and go straight to step 3 — the viewer lists whatever it finds there.

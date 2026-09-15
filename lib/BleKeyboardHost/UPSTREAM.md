@@ -1,8 +1,8 @@
 # BleKeyboardHost (project copy)
 
 This is a copy of `freeink-sdk/libs/network/BleKeyboardHost` taken from
-freeink-sdk commit `e7d3361` (2026-07-13, "Fix grayscale rendering and add OEM
-LUT reference"), with local changes applied on top. It lives here instead of
+freeink-sdk commit `48f5949` (2026-09-14, "Add vendor LUTs and MTP diagnostic
+logging for X4C"), with local changes applied on top. It lives here instead of
 being edited inside the submodule so the submodule stays pristine and commits
 in this repository stay simple. PlatformIO prefers project libraries in `lib/`
 over `lib_deps`, so this copy shadows the SDK one; the `lib_deps` entry for it
@@ -31,7 +31,7 @@ hypothesis until confirmed with a `[BleHid]` serial log from such a device.
 
 ## Re-syncing with the SDK
 
-1. `git -C freeink-sdk diff e7d3361 HEAD -- libs/network/BleKeyboardHost`
+1. `git -C freeink-sdk diff 48f5949 HEAD -- libs/network/BleKeyboardHost`
    shows what upstream changed since this copy was taken.
 2. Copy the new upstream files here, re-apply `freeink-sdk.patch` (resolve
    conflicts), update the commit hash above and regenerate the patch.

@@ -12,6 +12,7 @@
 #include "BleKeyboardLayouts.h"
 #include "CrossPointSettings.h"
 #include "MappedInputManager.h"
+#include "components/SimpleList.h"
 #include "components/UITheme.h"
 #include "fontIds.h"
 
@@ -343,15 +344,12 @@ void BluetoothSettingsActivity::render(RenderLock&&) {
   const Rect listRect{0, topOffset, pageWidth, contentHeight};
 
   if (view == View::Menu) {
-    GUI.drawList(
+    simplelist::draw(
         renderer, listRect, static_cast<int>(menuRows.size()), menuIndex,
-        [this](int i) { return std::string(I18N.get(menuRows[i].label)); }, nullptr, nullptr,
-        [this](int i) { return menuValue(i); }, true);
+        [this](int i) { return std::string(I18N.get(menuRows[i].label)); }, [this](int i) { return menuValue(i); });
   } else if (view == View::Layout) {
-    GUI.drawList(
-        renderer, listRect, blelayout::count(), layoutIndex,
-        [](int i) { return std::string(I18N.get(blelayout::at(static_cast<uint8_t>(i)).nameId)); }, nullptr, nullptr,
-        nullptr, false);
+    simplelist::draw(renderer, listRect, blelayout::count(), layoutIndex,
+                     [](int i) { return std::string(I18N.get(blelayout::at(static_cast<uint8_t>(i)).nameId)); });
   } else if (view == View::Scan) {
     // Free2/3 remotes only advertise in the right slider mode — tell the user how.
     GUI.drawHelpText(renderer, Rect{0, topOffset, pageWidth, 16}, tr(STR_BT_FREE_HINT1));
@@ -362,9 +360,8 @@ void BluetoothSettingsActivity::render(RenderLock&&) {
       GUI.drawHelpText(renderer, Rect{0, scanTop, pageWidth, 24},
                        BleHid.isScanning() ? tr(STR_SCANNING) : tr(STR_BT_NO_DEVICES));
     } else {
-      GUI.drawList(
-          renderer, Rect{0, scanTop, pageWidth, contentHeight - 38}, count, scanIndex,
-          [this](int i) { return deviceLabel(i); }, nullptr, nullptr, nullptr, false);
+      simplelist::draw(renderer, Rect{0, scanTop, pageWidth, contentHeight - 38}, count, scanIndex,
+                       [this](int i) { return deviceLabel(i); });
     }
   } else {  // Paired
     const int count = BleHid.pairedCount();
@@ -373,9 +370,9 @@ void BluetoothSettingsActivity::render(RenderLock&&) {
     } else {
       // The live link is marked in the value column so it is obvious which bond
       // is in use and which ones Confirm would switch to.
-      GUI.drawList(
-          renderer, listRect, count, pairedIndex, [this](int i) { return pairedLabel(i); }, nullptr, nullptr,
-          [this](int i) -> std::string { return pairedIsConnected(i) ? tr(STR_BT_CONNECTED) : ""; }, true);
+      simplelist::draw(
+          renderer, listRect, count, pairedIndex, [this](int i) { return pairedLabel(i); },
+          [this](int i) -> std::string { return pairedIsConnected(i) ? tr(STR_BT_CONNECTED) : ""; });
     }
   }
 
