@@ -114,6 +114,12 @@ void CrossPointSettings::toJson(JsonDocument& doc) const {
   if (dictionaryName[0] != '\0') {
     doc["dictionaryName"] = dictionaryName;
   }
+  // Task list font — same dynamic-option shape as the reader's, so also manual.
+  doc["taskFontFamily"] = taskFontFamily;
+  doc["taskFontSize"] = taskFontPointSize;
+  if (taskSdFontFamilyName[0] != '\0') {
+    doc["taskSdFontFamilyName"] = taskSdFontFamilyName;
+  }
 
   // Language -- managed by LanguageSelectActivity, not in SettingsList.
   // Stored as ISO code string ("EN", "DE", ...) for stability across enum reorders.
@@ -282,6 +288,11 @@ bool CrossPointSettings::fromJson(JsonVariantConst doc) {
   }
   // Dictionary folder name — uses dynamic getter/setter in SettingsList, load manually
   copyToField(dictionaryName, doc["dictionaryName"] | "", sizeof(dictionaryName));
+
+  // Task list font — dynamic options in SettingsList, so loaded manually too.
+  taskFontFamily = clamp(doc["taskFontFamily"] | (uint8_t)NOTOSERIF, BUILTIN_FONT_COUNT, NOTOSERIF);
+  taskFontPointSize = doc["taskFontSize"] | DEFAULT_FONT_POINT_SIZE;
+  copyToField(taskSdFontFamilyName, doc["taskSdFontFamilyName"] | "", sizeof(taskSdFontFamilyName));
 
   // Language -- stored as code string for stability across enum reorders.
   if (doc["language"].is<const char*>()) {

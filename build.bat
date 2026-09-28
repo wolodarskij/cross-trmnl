@@ -13,6 +13,7 @@ REM   --no-bluetooth   BLE keyboards / page-turner remotes (NimBLE)
 REM   --no-dashboard   x4-dashboard-server dashboard source
 REM   --no-trmnl       TRMNL / BYOS dashboard source
 REM   --no-lua         Lua script runner and the Scripts menu
+REM   --no-tasks       Task lists, their pages and the Tasks menu
 REM   e.g.  build.bat default --no-lua --no-trmnl
 REM They are exported as CROSSPOINT_FEATURE_<NAME>=0 for scripts/features.py.
 REM
@@ -43,6 +44,7 @@ set "CROSSPOINT_FEATURE_BLUETOOTH=1"
 set "CROSSPOINT_FEATURE_DASHBOARD=1"
 set "CROSSPOINT_FEATURE_TRMNL=1"
 set "CROSSPOINT_FEATURE_LUA=1"
+set "CROSSPOINT_FEATURE_TASKS=1"
 
 REM First word is the env name.
 set "ENVNAME=%~1"
@@ -66,6 +68,7 @@ if /I "%~1"=="--no-bluetooth" set "CROSSPOINT_FEATURE_BLUETOOTH=0" & shift & got
 if /I "%~1"=="--no-dashboard" set "CROSSPOINT_FEATURE_DASHBOARD=0" & shift & goto collectloop
 if /I "%~1"=="--no-trmnl"     set "CROSSPOINT_FEATURE_TRMNL=0" & shift & goto collectloop
 if /I "%~1"=="--no-lua"       set "CROSSPOINT_FEATURE_LUA=0" & shift & goto collectloop
+if /I "%~1"=="--no-tasks"     set "CROSSPOINT_FEATURE_TASKS=0" & shift & goto collectloop
 set "PASS=%PASS% %1"
 shift
 goto collectloop
@@ -81,7 +84,7 @@ if not "%PIO%"=="pio" if not exist "%PIO%" (
 )
 
 echo Building env:%ENVNAME% %TARGET%%PASS%
-echo Features: bluetooth=%CROSSPOINT_FEATURE_BLUETOOTH% dashboard=%CROSSPOINT_FEATURE_DASHBOARD% trmnl=%CROSSPOINT_FEATURE_TRMNL% lua=%CROSSPOINT_FEATURE_LUA%  (1 = on)
+echo Features: bluetooth=%CROSSPOINT_FEATURE_BLUETOOTH% dashboard=%CROSSPOINT_FEATURE_DASHBOARD% trmnl=%CROSSPOINT_FEATURE_TRMNL% lua=%CROSSPOINT_FEATURE_LUA% tasks=%CROSSPOINT_FEATURE_TASKS%  (1 = on)
 echo.
 "%PIO%" run -e "%ENVNAME%" %TARGET%%PASS%
 set "RC=%ERRORLEVEL%"

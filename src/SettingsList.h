@@ -138,6 +138,95 @@ inline SettingInfo buildFontSizeSetting(const SdCardFontRegistry* registry) {
   return s;
 }
 
+// The task list's own font family, built the same way as the reader's: the two
+// built-in families first, then every SD family the registry knows. Kept
+// separate from the reader's so a list can be rendered in a size that reads
+// well from across the room without disturbing how books look.
+inline SettingInfo buildTaskFontFamilySetting(const SdCardFontRegistry* registry) {
+  std::vector<std::string> sdFamilyNames;
+  if (registry) {
+    const auto& families = registry->getFamilies();
+    sdFamilyNames.reserve(families.size());
+    std::transform(families.begin(), families.end(), std::back_inserter(sdFamilyNames),
+                   [](const SdCardFontFamilyInfo& f) { return f.name; });
+  }
+
+  std::vector<std::string> allStringValues;
+  if (!sdFamilyNames.empty()) {
+    allStringValues.push_back(I18N.get(StrId::STR_NOTO_SERIF));
+    allStringValues.push_back(I18N.get(StrId::STR_NOTO_SANS));
+    allStringValues.insert(allStringValues.end(), sdFamilyNames.begin(), sdFamilyNames.end());
+  }
+
+  SettingInfo s;
+  s.nameId = StrId::STR_TASK_FONT_FAMILY;
+  s.type = SettingType::ENUM;
+  s.enumValues = {StrId::STR_NOTO_SERIF, StrId::STR_NOTO_SANS};
+  s.enumStringValues = std::move(allStringValues);
+  s.key = "taskFontFamily";
+  s.category = StrId::STR_CAT_DISPLAY;
+
+  s.valueGetter = [sdFamilyNames]() -> uint8_t {
+    if (SETTINGS.taskSdFontFamilyName[0] != '\0') {
+      for (int i = 0; i < static_cast<int>(sdFamilyNames.size()); i++) {
+        if (sdFamilyNames[i] == SETTINGS.taskSdFontFamilyName) {
+          return static_cast<uint8_t>(CrossPointSettings::BUILTIN_FONT_COUNT + i);
+        }
+      }
+    }
+    return SETTINGS.taskFontFamily < CrossPointSettings::BUILTIN_FONT_COUNT ? SETTINGS.taskFontFamily : 0;
+  };
+
+  s.valueSetter = [sdFamilyNames](uint8_t v) {
+    if (v < CrossPointSettings::BUILTIN_FONT_COUNT) {
+      SETTINGS.taskFontFamily = v;
+      SETTINGS.taskSdFontFamilyName[0] = '\0';
+    } else {
+      const int sdIdx = v - CrossPointSettings::BUILTIN_FONT_COUNT;
+      if (sdIdx < static_cast<int>(sdFamilyNames.size())) {
+        strncpy(SETTINGS.taskSdFontFamilyName, sdFamilyNames[sdIdx].c_str(),
+                sizeof(SETTINGS.taskSdFontFamilyName) - 1);
+        SETTINGS.taskSdFontFamilyName[sizeof(SETTINGS.taskSdFontFamilyName) - 1] = '\0';
+      }
+    }
+  };
+
+  return s;
+}
+
+// Point sizes the task font's family actually ships, exactly as the reader's
+// size entry works.
+inline SettingInfo buildTaskFontSizeSetting(const SdCardFontRegistry* registry) {
+  const std::vector<uint8_t> sizes = readerFontPointSizes(registry, SETTINGS.taskSdFontFamilyName);
+
+  std::vector<std::string> labels;
+  labels.reserve(sizes.size());
+  for (const uint8_t pt : sizes) {
+    labels.push_back(std::to_string(pt) + " pt");
+  }
+
+  SettingInfo s;
+  s.nameId = StrId::STR_TASK_FONT_SIZE;
+  s.type = SettingType::ENUM;
+  s.enumStringValues = std::move(labels);
+  s.key = "taskFontSize";
+  s.category = StrId::STR_CAT_DISPLAY;
+
+  s.valueGetter = [sizes]() -> uint8_t {
+    const uint8_t pt = snapToNearestPointSize(sizes, SETTINGS.taskFontPointSize);
+    for (int i = 0; i < static_cast<int>(sizes.size()); i++) {
+      if (sizes[i] == pt) return static_cast<uint8_t>(i);
+    }
+    return 0;
+  };
+
+  s.valueSetter = [sizes](uint8_t v) {
+    if (v < sizes.size()) SETTINGS.taskFontPointSize = sizes[v];
+  };
+
+  return s;
+}
+
 // Build the dictionary selection setting dynamically from the folders discovered
 // under /dictionaries. "None" plus one option per dictionary; the selected folder
 // name persists in SETTINGS.dictionaryName (saved/loaded manually in
@@ -212,6 +301,7 @@ inline std::vector<SettingInfo> getSettingsList(const SdCardFontRegistry* regist
     sleepScreenValues[CrossPointSettings::TRANSPARENT_CUSTOM] = StrId::STR_TRANSPARENT;
     sleepScreenValues[CrossPointSettings::DASHBOARD] = StrId::STR_DASHBOARD;
     sleepScreenValues[CrossPointSettings::DASHBOARD_AUTOUPDATE] = StrId::STR_DASHBOARD_AUTOUPDATE;
+    sleepScreenValues[CrossPointSettings::TASKS] = StrId::STR_TASKS;
 
     std::vector<StrId> statusBarClockValues(CrossPointSettings::STATUS_BAR_CLOCK_MODE_COUNT);
     statusBarClockValues[CrossPointSettings::STATUS_BAR_CLOCK_HIDE] = StrId::STR_HIDE;
@@ -262,6 +352,16 @@ inline std::vector<SettingInfo> getSettingsList(const SdCardFontRegistry* regist
         // Night mode = inverted output polarity everywhere (ActivityManager
         // applies it to every activity), so it lives in the Display category.
         SettingInfo::Toggle(StrId::STR_NIGHT_MODE, &CrossPointSettings::screenInverted, "screenInverted",
+                            StrId::STR_CAT_DISPLAY),
+        // Task list entries. Like the dashboard ones above they stay in the list
+        // in every build variant so the settings file round-trips;
+        // SettingsActivity hides them when the feature is compiled out. The two
+        // font entries are placeholders replaced below, since their options
+        // depend on the SD font registry.
+        SettingInfo::Enum(StrId::STR_TASK_FONT_FAMILY, &CrossPointSettings::taskFontFamily,
+                          {StrId::STR_NOTO_SERIF, StrId::STR_NOTO_SANS}, "taskFontFamily", StrId::STR_CAT_DISPLAY),
+        SettingInfo::Enum(StrId::STR_TASK_FONT_SIZE, nullptr, {}, "taskFontSize", StrId::STR_CAT_DISPLAY),
+        SettingInfo::Toggle(StrId::STR_TASK_HIDE_DONE, &CrossPointSettings::taskHideDone, "taskHideDone",
                             StrId::STR_CAT_DISPLAY),
 
         // --- Reader ---
@@ -540,6 +640,20 @@ inline std::vector<SettingInfo> getSettingsList(const SdCardFontRegistry* regist
     auto it = std::find_if(v.begin(), v.end(), [](const SettingInfo& s) { return s.nameId == StrId::STR_FONT_SIZE; });
     if (it != v.end()) {
       *it = buildFontSizeSetting(registry);
+    }
+  }
+  if (registry && registry->getFamilyCount() > 0) {
+    auto it =
+        std::find_if(v.begin(), v.end(), [](const SettingInfo& s) { return s.nameId == StrId::STR_TASK_FONT_FAMILY; });
+    if (it != v.end()) {
+      *it = buildTaskFontFamilySetting(registry);
+    }
+  }
+  {
+    auto it =
+        std::find_if(v.begin(), v.end(), [](const SettingInfo& s) { return s.nameId == StrId::STR_TASK_FONT_SIZE; });
+    if (it != v.end()) {
+      *it = buildTaskFontSizeSetting(registry);
     }
   }
   if (dictionaries && !dictionaries->empty()) {

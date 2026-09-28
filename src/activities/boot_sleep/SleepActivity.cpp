@@ -34,6 +34,12 @@
 #if CROSSPOINT_FEATURE_DASHBOARD_ANY
 #include "network/DashboardImage.h"
 #endif
+#if CROSSPOINT_FEATURE_TASKS
+#include <vector>
+
+#include "tasks/TaskFile.h"
+#include "tasks/TaskRenderer.h"
+#endif
 #include "network/WifiConnector.h"
 
 namespace {
@@ -576,6 +582,8 @@ void SleepActivity::onEnter() {
       return renderDashboardSleepScreen(false);
     case (CrossPointSettings::SLEEP_SCREEN_MODE::DASHBOARD_AUTOUPDATE):
       return renderDashboardSleepScreen(true);
+    case (CrossPointSettings::SLEEP_SCREEN_MODE::TASKS):
+      return renderTasksSleepScreen();
     default:
       return renderDefaultSleepScreen();
   }
@@ -618,6 +626,54 @@ void SleepActivity::renderDashboardSleepScreen(bool autoUpdate) const {
       // Landscape images (e.g. TRMNL's 800x480) render full-screen by
       // switching the renderer orientation for the draw; drawBitmap and the
       // logical dims inside renderBitmapSleepScreen follow it.
+      const bool landscape = bitmap.getWidth() > bitmap.getHeight();
+      if (landscape) renderer.setOrientation(GfxRenderer::Orientation::LandscapeCounterClockwise);
+      renderBitmapSleepScreen(bitmap);
+      if (landscape) renderer.setOrientation(GfxRenderer::Orientation::Portrait);
+      return;
+    }
+  }
+
+  renderDefaultSleepScreen();
+#endif
+}
+
+void SleepActivity::renderTasksSleepScreen() const {
+#if !CROSSPOINT_FEATURE_TASKS
+  // No task support in this build: the TASKS sleep mode stays selectable (its
+  // enum value is persisted) but draws the default screen.
+  renderDefaultSleepScreen();
+  return;
+#else
+  // The list the user last opened; failing that, the first one on the card, so
+  // a card with a single checklist works without visiting the menu first.
+  std::string listId = APP_STATE.taskListId;
+  if (listId.empty() || !Storage.exists(tasks::listPath(listId).c_str())) {
+    std::vector<std::string> lists;
+    tasks::scanLists(lists);
+    if (lists.empty()) return renderDefaultSleepScreen();
+    listId = lists.front();
+  }
+
+  // Re-render only when something actually changed. Ticking a task does not
+  // change the file size, so the stamp compares content rather than metadata;
+  // without that this would redraw every page on every single sleep.
+  TaskFile file;
+  if (file.load(tasks::listPath(listId))) {
+    const bool hideDone = SETTINGS.taskHideDone != 0;
+    const int fontId = taskrender::resolveFontId(renderer);
+    if (taskrender::needsRender(file, listId, fontId, hideDone)) {
+      LOG_DBG("SLP", "Task pages stale, re-rendering %s", listId.c_str());
+      taskrender::renderToBmps(renderer, file, listId, fontId, hideDone);
+    }
+  }
+
+  HalFile pageFile;
+  const std::string path = taskrender::pagePath(listId, 1);
+  if (Storage.openFileForRead("SLP", path, pageFile)) {
+    Bitmap bitmap(pageFile, true);
+    if (bitmap.parseHeaders() == BmpReaderError::Ok) {
+      LOG_DBG("SLP", "Rendering tasks sleep screen");
       const bool landscape = bitmap.getWidth() > bitmap.getHeight();
       if (landscape) renderer.setOrientation(GfxRenderer::Orientation::LandscapeCounterClockwise);
       renderBitmapSleepScreen(bitmap);

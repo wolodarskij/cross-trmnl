@@ -31,6 +31,11 @@ class CrossPointState : public PersistableStore<CrossPointState> {
   // Left/Right on the dashboard, never from the settings menu. Empty means
   // "no pick yet" - the dashboard then shows the first screen it finds.
   std::string dashboardScreenId;
+  // Which list in /tasks was last opened (file stem, no extension). State for
+  // the same reason as dashboardScreenId: the user picks it by opening a list,
+  // not from the settings menu. The Tasks sleep screen renders this one. Empty
+  // means "no pick yet" — the sleep screen then falls back to the first list.
+  std::string taskListId;
 
   static const char* getFilePath() { return "/.crosspoint/state.json"; }
   void toJson(JsonDocument& doc) const;

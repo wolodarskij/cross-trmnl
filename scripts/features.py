@@ -7,7 +7,7 @@ it adds -DCROSSPOINT_FEATURE_<NAME>=0 (see src/Features.h for the guards),
 removes the feature's source directories from the build so the LDF never sees
 their includes, and keeps the feature's library out of the link.
 
-Features: BLUETOOTH, DASHBOARD (x4-dashboard-server source), TRMNL, LUA.
+Features: BLUETOOTH, DASHBOARD (x4-dashboard-server source), TRMNL, LUA, TASKS.
 The `slim` env always builds without Bluetooth.
 """
 
@@ -15,7 +15,7 @@ import os
 
 Import("env")  # noqa: F821 - provided by PlatformIO
 
-FEATURES = ("BLUETOOTH", "DASHBOARD", "TRMNL", "LUA")
+FEATURES = ("BLUETOOTH", "DASHBOARD", "TRMNL", "LUA", "TASKS")
 
 
 def _enabled(name):
@@ -40,6 +40,8 @@ env.Append(CPPDEFINES=defines)
 excludes = []
 if not flags["LUA"]:
     excludes += ["-<scripting/>", "-<activities/scripts/>"]
+if not flags["TASKS"]:
+    excludes += ["-<tasks/>", "-<activities/tasks/>"]
 if not flags["TRMNL"]:
     excludes += ["-<network/TrmnlClient.cpp>"]
 if not flags["DASHBOARD"]:

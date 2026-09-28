@@ -28,6 +28,9 @@
 #if CROSSPOINT_FEATURE_LUA
 #include "scripts/ScriptBrowserActivity.h"
 #endif
+#if CROSSPOINT_FEATURE_TASKS
+#include "tasks/TaskListBrowserActivity.h"
+#endif
 #include "settings/OpdsServerListActivity.h"
 #include "settings/SettingsActivity.h"
 #include "util/BmpViewerActivity.h"
@@ -261,6 +264,12 @@ void ActivityManager::goToDashboard() {
 void ActivityManager::goToScripts() {
 #if CROSSPOINT_FEATURE_LUA
   replaceActivity(std::make_unique<ScriptBrowserActivity>(renderer, mappedInput));
+#endif
+}
+
+void ActivityManager::goToTasks() {
+#if CROSSPOINT_FEATURE_TASKS
+  replaceActivity(std::make_unique<TaskListBrowserActivity>(renderer, mappedInput));
 #endif
 }
 

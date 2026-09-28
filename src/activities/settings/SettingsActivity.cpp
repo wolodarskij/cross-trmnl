@@ -60,6 +60,9 @@ bool settingCompiledIn(const SettingInfo& setting) {
 #if !(CROSSPOINT_FEATURE_DASHBOARD && CROSSPOINT_FEATURE_TRMNL)
   if (strcmp(key, "dashboardSource") == 0) return false;  // one source: nothing to choose
 #endif
+#if !CROSSPOINT_FEATURE_TASKS
+  if (strncmp(key, "task", 4) == 0) return false;
+#endif
 #if !CROSSPOINT_FEATURE_LUA
   if (strncmp(key, "script", 6) == 0) return false;
 #endif

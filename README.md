@@ -52,6 +52,12 @@ CrossPoint README, preserved verbatim).
   notes on the SD card with the on-screen keyboard or a connected BLE
   keyboard. A new file opens straight into the line editor; with a keyboard
   connected the page is typed into directly and Confirm saves.
+- **Tasks** on the home menu — Markdown checklists kept in `/tasks` on the SD
+  card. Pick a list, walk it with the buttons, and Confirm cycles a task
+  through *open -> in progress -> done*. Leaving a list writes it back and
+  renders it to full-screen BMP pages, which a **Tasks** sleep-screen mode can
+  show as the screensaver. The files are ordinary `.md`, so the text editor
+  above writes the tasks and this reads them.
 
 **The complete change list vs. upstream is in [FEATURES.md](./FEATURES.md).**
 
@@ -94,13 +100,15 @@ you do not want with any of these flags, in any position:
 
 ```
 build.bat default --no-lua                 no Lua scripts / Scripts menu
+build.bat default --no-tasks               no task lists / Tasks menu
 build.bat default --no-bluetooth           no BLE keyboards or remotes
 build.bat default --no-dashboard --no-trmnl   no dashboard at all
 ```
 
 `--no-dashboard` removes the x4-dashboard-server source, `--no-trmnl` the
 TRMNL one; with both gone the Dashboard menu entry and sleep modes go too.
-Without `build.bat`, export `CROSSPOINT_FEATURE_<BLUETOOTH|DASHBOARD|TRMNL|LUA>=0`
+Without `build.bat`, export
+`CROSSPOINT_FEATURE_<BLUETOOTH|DASHBOARD|TRMNL|LUA|TASKS>=0`
 before `pio run`. Settings for a feature that is compiled out are kept in the
 settings file, so switching variants does not lose them.
 
@@ -181,6 +189,42 @@ open in the editor (the whole document is held in RAM); anything larger stays
 readable in the normal reader. Editing a line that contains non-ASCII text via
 the *on-screen* keyboard can mangle it — that keyboard is byte-oriented and
 predates this feature; the BLE keyboard path is UTF-8-safe.
+
+### Tasks
+
+Put Markdown checklists in a `/tasks` folder on the SD card, one file per list:
+
+```markdown
+# Shipping
+- [ ] Buy milk
+- [/] Write the plan          due:2026-09-20
+- [x] Ship firmware
+```
+
+`[ ]` is open, `[/]` in progress, `[x]` done; a trailing `due:YYYY-MM-DD` is
+optional and shows in the row's right-hand column. `#` headings become section
+headers. Anything the parser does not recognise as a task is left alone, so a
+list can hold notes and prose as well.
+
+Home → **Tasks** → pick a list. **Confirm** cycles the selected task through
+open → in progress → done; **long-Confirm** (or a touch long-press) opens
+options: hide/show completed tasks, and export the pages. Nothing else is
+edited here — the task text itself is written in the **Text editor** above,
+which opens the very same files.
+
+Leaving a list saves it and re-renders it to `/tasks/<name>-1.bmp`, `-2.bmp`, …
+— ordinary full-screen BMPs you can open in the file browser or copy off the
+card. Set Settings → Display → **Sleep Screen** → *Tasks* and the first page
+becomes the screensaver, refreshed on the way into sleep whenever the list has
+actually changed. **Task Font Family** and **Task Font Size**, in the same
+Display section, set how the pages are typeset; they are independent of the
+reader's font, so a list can be rendered large enough to read from across the
+room. Completed tasks render struck through and in-progress ones bold.
+
+Saves are crash-safe (temp file + rename) and only ever rewrite the one
+character between the brackets, so a list edited by other tools survives
+intact. Limits: **16 KB** and **500 lines** per list, and at most **8** rendered
+pages.
 
 ## Credits
 

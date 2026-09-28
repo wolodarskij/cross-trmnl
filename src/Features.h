@@ -17,6 +17,8 @@
 //                                 screen sets, dashboard.bmp single image).
 //   CROSSPOINT_FEATURE_TRMNL      TRMNL / BYOS dashboard source.
 //   CROSSPOINT_FEATURE_LUA        Lua script runner and the Scripts menu.
+//   CROSSPOINT_FEATURE_TASKS      Task lists, their rendered BMP pages, the
+//                                 Tasks menu entry and the Tasks sleep screen.
 
 #ifndef CROSSPOINT_FEATURE_BLUETOOTH
 #define CROSSPOINT_FEATURE_BLUETOOTH 1
@@ -29,6 +31,9 @@
 #endif
 #ifndef CROSSPOINT_FEATURE_LUA
 #define CROSSPOINT_FEATURE_LUA 1
+#endif
+#ifndef CROSSPOINT_FEATURE_TASKS
+#define CROSSPOINT_FEATURE_TASKS 1
 #endif
 
 // The dashboard viewer, its home-menu entry and the two dashboard sleep-screen

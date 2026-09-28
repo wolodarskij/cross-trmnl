@@ -122,7 +122,8 @@ only one compiled in the selector disappears and that source is used.
 
 ### Optional features (build switches)
 - Every fork feature is a build option: `build.bat default --no-bluetooth
-  --no-dashboard --no-trmnl --no-lua` in any combination (all on by default;
+  --no-dashboard --no-trmnl --no-lua --no-tasks` in any combination (all on by
+  default;
   `slim` is always without Bluetooth). `scripts/features.py` turns the flags
   into `CROSSPOINT_FEATURE_*` defines (`src/Features.h`), drops the feature's
   sources from the build so the LDF never pulls its library (Lua, NimBLE),
@@ -182,6 +183,45 @@ only one compiled in the selector disappears and that source is used.
 - Note: upstream `SCOPE.md` explicitly excludes notepads/typed notes — this
   feature is deliberately fork-local and not intended for an upstream PR.
 
+### Task lists (fork-local)
+- Home-menu viewer for Markdown checklists in `/tasks`: pick a list, and Confirm
+  cycles the selected task through open -> in progress -> done. A long-Confirm
+  (or touch long-press) hides/shows completed tasks and exports the pages.
+- Deliberately not an editor. The files are ordinary `.md`, so the text editor
+  above writes the task text and this only marks it. `- [ ]` / `- [/]` / `- [x]`
+  with an optional trailing `due:YYYY-MM-DD`; `#` headings become section rows.
+- **Lossless by construction.** Every line keeps its original bytes, and the only
+  mutation the model can make is overwriting the single character between the
+  brackets. Lines the parser does not recognise as tasks — prose, nested bullets,
+  a `[!]` marker some other tool wrote — are carried through untouched, so a save
+  cannot damage a file this code did not fully understand. Saving uses the same
+  crash-safe temp + rename shape as the editor.
+- Bounded like the editor and for the same reason (the document is one contiguous
+  line vector): **16 KB**, **500 lines**, plus free-heap and largest-free-block
+  gates. `TaskLine` stores spans into the raw line rather than copies, so a line
+  costs one string rather than three.
+- **Rendered pages.** Leaving a list (which includes the sleep transition, since
+  `onExit()` runs on stacked activities) saves it and re-renders it to
+  `/tasks/<name>-<page>.bmp`, capped at 8 pages. Rendering draws into the
+  framebuffer and serialises with the existing `ScreenshotUtil::
+  saveFramebufferAsBmp`, which rotates to the panel's own portrait size — the
+  same shape the dashboard sleep path already consumes, so the new `TASKS`
+  sleep-screen mode is a near-copy of `renderDashboardSleepScreen`.
+- Re-render is gated on an FNV-1a hash of the content, not the file's size or
+  mtime: ticking a task changes neither, so a metadata check would leave the
+  screensaver stale forever. The stamp also covers the font and hide-done
+  choices, so changing either re-renders.
+- Drawing the pages by hand (rather than through the FreeInkUI list) is what
+  allows real typographic state: in-progress rows are bold, done rows struck
+  through. `fui::ListProps` styles a whole list, not individual rows, so the
+  on-screen view carries state in a per-row checkbox glyph instead.
+- **Task font** (`taskFontFamily` / `taskFontSize`) is independent of the
+  reader's, so a list can be set large enough to read across a room. That needed
+  `SdCardFontSystem::ensureExtraSize()`: `loadFamily()` keeps exactly one
+  reader-size font resident, so an SD family at a different task size is simply
+  not loaded, and `resolveFontId()` can only ever return the reader's. It falls
+  back through `snapToNearestPointSize` to a built-in Noto face.
+
 ## Code changes
 
 New files:
@@ -199,23 +239,29 @@ New files:
 | `src/activities/scripts/ScriptBrowserActivity.{h,cpp}` | `/scripts` file list |
 | `src/activities/scripts/ScriptRunActivity.{h,cpp}` | run a script + show result/errors |
 | `docs/SCRIPTING.md`, `lua-scripts-src/*` | scripting docs + sample scripts |
+| `src/tasks/TaskFile.{h,cpp}` | Markdown checklist model: lossless parse, marker-only mutation, crash-safe save |
+| `src/tasks/TaskRenderer.{h,cpp}` | page layout + BMP output, content-hash staleness stamp, task font resolution |
+| `src/activities/tasks/TaskListBrowserActivity.{h,cpp}` | `/tasks` list picker |
+| `src/activities/tasks/TasksActivity.{h,cpp}` | the list view: mark state, hide done, export |
+| `src/components/icons/tasks.h`, `taskStateIcons.h` | menu icon + the three state glyphs (`scripts/gen_task_icons.py`) |
 | `FEATURES.md` | this document |
 
 Modified files (all changes small and localized):
 
 | File | Change |
 |---|---|
-| `src/CrossPointSettings.h` | `DASHBOARD`/`DASHBOARD_AUTOUPDATE` sleep modes, `DASHBOARD_SOURCE` enum (X4, TRMNL), new string settings |
-| `src/SettingsList.h` | new settings entries; sleep-label order fix |
-| `lib/I18n/translations/english.yaml` | new UI strings (dashboard + scripts) |
-| `src/activities/boot_sleep/SleepActivity.{h,cpp}` | dashboard sleep-screen render (+ landscape), resolved image path |
-| `src/CrossPointState.cpp` | persist `dashboardScreenId` in `state.json` |
-| `src/activities/home/HomeActivity.{h,cpp}` | Dashboard + Scripts menu items |
-| `src/activities/ActivityManager.{h,cpp}` | `goToDashboard()`/`goToScripts()`, `isDashboardActivity()` |
+| `src/CrossPointSettings.h` | `DASHBOARD`/`DASHBOARD_AUTOUPDATE`/`TASKS` sleep modes, `DASHBOARD_SOURCE` enum (X4, TRMNL), new string settings, task font fields |
+| `src/SettingsList.h` | new settings entries; task font builders; sleep-label order fix |
+| `lib/I18n/translations/english.yaml` | new UI strings (dashboard, scripts, tasks) |
+| `src/activities/boot_sleep/SleepActivity.{h,cpp}` | dashboard + tasks sleep-screen render (+ landscape), resolved image path |
+| `src/CrossPointState.{h,cpp}` | persist `dashboardScreenId` and `taskListId` in `state.json` |
+| `src/activities/home/HomeActivity.{h,cpp}` | Dashboard, Scripts + Tasks menu items |
+| `src/activities/ActivityManager.{h,cpp}` | `goToDashboard()`/`goToScripts()`/`goToTasks()`, `isDashboardActivity()` |
 | `src/activities/Activity.h` | `isDashboardActivity()` virtual |
 | `src/activities/settings/SettingsActivity.cpp` | on-device string editing; string value display |
 | `src/CrossPointState.h` | `sleepingFromDashboard` flag (not persisted); `dashboardScreenId` (persisted) |
 | `src/main.cpp` | set the flag in `enterDeepSleep()` |
+| `src/SdCardFontSystem.{h,cpp}` | `ensureExtraSize()` for fonts rendered at a non-reader size |
 
 ## Companion projects
 

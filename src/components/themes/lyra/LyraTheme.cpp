@@ -24,6 +24,7 @@
 #include "components/icons/recent.h"
 #include "components/icons/script.h"
 #include "components/icons/settings2.h"
+#include "components/icons/tasks.h"
 #include "components/icons/transfer.h"
 #include "components/icons/wifi.h"
 #include "fontIds.h"
@@ -64,6 +65,8 @@ const uint8_t* iconForName(UIIcon icon) {
       return DashboardIcon;
     case UIIcon::Script:
       return ScriptIcon;
+    case UIIcon::Tasks:
+      return TasksIcon;
     default:
       return nullptr;
   }

@@ -26,6 +26,7 @@ enum class HomeMenuItem {
   DASHBOARD,
   SCRIPTS,
   TEXT_EDITOR,
+  TASKS,
   SETTINGS_MENU
 };
 
@@ -96,6 +97,7 @@ class ActivityManager {
   void goToSettings();
   void goToDashboard();
   void goToScripts();
+  void goToTasks();
   void goToFileBrowser(std::string path = {});
   void goToLibrary();
   void goToBrowser();

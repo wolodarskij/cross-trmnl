@@ -51,6 +51,10 @@ class HomeActivity final : public Activity {
     if (item == HomeMenuItem::SCRIPTS) return i;
     ++i;
 #endif
+#if CROSSPOINT_FEATURE_TASKS
+    if (item == HomeMenuItem::TASKS) return i;
+    ++i;
+#endif
     if (item == HomeMenuItem::TEXT_EDITOR) return i;
     ++i;
     if (item == HomeMenuItem::SETTINGS_MENU) return i;
@@ -70,6 +74,9 @@ class HomeActivity final : public Activity {
 #if CROSSPOINT_FEATURE_LUA
     if (idx == i++) return HomeMenuItem::SCRIPTS;
 #endif
+#if CROSSPOINT_FEATURE_TASKS
+    if (idx == i++) return HomeMenuItem::TASKS;
+#endif
     if (idx == i++) return HomeMenuItem::TEXT_EDITOR;
     if (idx == i) return HomeMenuItem::SETTINGS_MENU;
     return HomeMenuItem::NONE;
@@ -82,6 +89,7 @@ class HomeActivity final : public Activity {
   void onOpdsBrowserOpen();
   void onDashboardOpen();
   void onScriptsOpen();
+  void onTasksOpen();
   void onTextEditorOpen();
 
   int getMenuItemCount() const;

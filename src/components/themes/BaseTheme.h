@@ -137,7 +137,8 @@ enum UIIcon {
   Usb,
   Blocks,
   Dashboard,
-  Script
+  Script,
+  Tasks
 };
 
 // Default theme implementation (Classic Theme)

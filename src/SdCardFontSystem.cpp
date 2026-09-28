@@ -181,3 +181,10 @@ int SdCardFontSystem::resolveFontId(const char* familyName, uint8_t /*pointSize*
   // that font's ID. ensureLoaded() must have run for the current settings first.
   return manager_.getFontId(familyName);
 }
+
+int SdCardFontSystem::ensureExtraSize(GfxRenderer& renderer, const char* familyName, const uint8_t pointSize) {
+  if (!familyName || familyName[0] == '\0') return 0;
+  const auto* family = registry_.findFamily(familyName);
+  if (!family) return 0;
+  return manager_.loadFamilyExtraSize(*family, renderer, pointSize);
+}

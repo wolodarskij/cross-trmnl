@@ -26,8 +26,9 @@
 
 int HomeActivity::getMenuItemCount() const {
   // File Browser, Library, File transfer, Text editor, Settings, plus the
-  // optional Dashboard and Scripts entries (Features.h).
-  int count = 5 + (CROSSPOINT_FEATURE_DASHBOARD_ANY ? 1 : 0) + (CROSSPOINT_FEATURE_LUA ? 1 : 0);
+  // optional Dashboard, Scripts and Tasks entries (Features.h).
+  int count = 5 + (CROSSPOINT_FEATURE_DASHBOARD_ANY ? 1 : 0) + (CROSSPOINT_FEATURE_LUA ? 1 : 0) +
+              (CROSSPOINT_FEATURE_TASKS ? 1 : 0);
   if (!recentBooks.empty()) {
     count += recentBooks.size();
   }
@@ -201,6 +202,9 @@ void HomeActivity::loop() {
       case HomeMenuItem::SCRIPTS:
         onScriptsOpen();
         break;
+      case HomeMenuItem::TASKS:
+        onTasksOpen();
+        break;
       case HomeMenuItem::TEXT_EDITOR:
         onTextEditorOpen();
         break;
@@ -322,8 +326,8 @@ void HomeActivity::render(RenderLock&&) {
   // menuItems: drawButtonMenu indexes both by row.
   std::vector<const char*> menuItems;
   std::vector<UIIcon> menuIcons;
-  menuItems.reserve(9);
-  menuIcons.reserve(9);
+  menuItems.reserve(10);
+  menuIcons.reserve(10);
   menuItems.push_back(tr(STR_BROWSE_FILES));
   menuIcons.push_back(Folder);
   menuItems.push_back(tr(STR_LIBRARY));
@@ -337,6 +341,10 @@ void HomeActivity::render(RenderLock&&) {
 #if CROSSPOINT_FEATURE_LUA
   menuItems.push_back(tr(STR_SCRIPTS));
   menuIcons.push_back(Script);
+#endif
+#if CROSSPOINT_FEATURE_TASKS
+  menuItems.push_back(tr(STR_TASKS));
+  menuIcons.push_back(Tasks);
 #endif
   menuItems.push_back(tr(STR_TEXT_EDITOR));
   menuIcons.push_back(Text);
@@ -428,6 +436,8 @@ void HomeActivity::onTextEditorOpen() {
                                [this](const ActivityResult&) { requestUpdate(); });
       });
 }
+
+void HomeActivity::onTasksOpen() { activityManager.goToTasks(); }
 
 void HomeActivity::onSettingsOpen() { activityManager.goToSettings(); }
 

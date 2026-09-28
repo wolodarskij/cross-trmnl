@@ -54,6 +54,7 @@ void CrossPointState::toJson(JsonDocument& doc) const {
   doc["lastSleepFromReader"] = lastSleepFromReader;
   doc["showBootScreen"] = showBootScreen;
   doc["dashboardScreenId"] = dashboardScreenId;
+  doc["taskListId"] = taskListId;
 }
 
 bool CrossPointState::fromJson(JsonVariantConst doc) {
@@ -93,5 +94,6 @@ bool CrossPointState::fromJson(JsonVariantConst doc) {
   showBootScreen = doc["showBootScreen"] | true;
   // const char* read, never `| std::string(...)`: see the note in PersistableStore.h.
   dashboardScreenId = doc["dashboardScreenId"] | "";
+  taskListId = doc["taskListId"] | "";
   return true;
 }

@@ -26,6 +26,15 @@ class SdCardFontSystem {
   /// Returns 0 if not found. Used by CrossPointSettings::getReaderFontId().
   int resolveFontId(const char* familyName, uint8_t pointSize) const;
 
+  /// Additively load `familyName` at `pointSize` and return its font id, or 0
+  /// when the family is unknown or ships no file at that size.
+  ///
+  /// resolveFontId() can only ever hand back the single reader-size font the
+  /// manager keeps resident, so anything rendering at its own size (the task
+  /// list pages) has to ask for that size explicitly. Already-loaded sizes are
+  /// reused, so calling this per render is cheap.
+  int ensureExtraSize(GfxRenderer& renderer, const char* familyName, uint8_t pointSize);
+
   /// Access the registry (e.g. for settings UI to enumerate available fonts).
   const SdCardFontRegistry& registry() const { return registry_; }
 

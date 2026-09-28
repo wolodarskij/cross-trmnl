@@ -27,6 +27,7 @@ class CrossPointSettings : public PersistableStore<CrossPointSettings> {
     TRANSPARENT_CUSTOM = 7,
     DASHBOARD = 8,             // last fetched dashboard image, no network on sleep
     DASHBOARD_AUTOUPDATE = 9,  // fetch a fresh dashboard image on every sleep
+    TASKS = 10,                // the selected task list's first rendered page
     SLEEP_SCREEN_MODE_COUNT
   };
   enum SLEEP_SCREEN_COVER_MODE { FIT = 0, CROP = 1, SLEEP_SCREEN_COVER_MODE_COUNT };
@@ -361,6 +362,14 @@ class CrossPointSettings : public PersistableStore<CrossPointSettings> {
   uint8_t readerMenuStyle = READER_MENU_LIST;
   // SD card font family name (empty = use built-in fontFamily)
   char sdFontFamilyName[32] = "";
+  // Task list font, independent of the reader's so a list can be set in a size
+  // that reads well across the room as a sleep screen. Same three-field model:
+  // an empty taskSdFontFamilyName means the built-in taskFontFamily is used.
+  uint8_t taskFontFamily = NOTOSERIF;
+  uint8_t taskFontPointSize = DEFAULT_FONT_POINT_SIZE;
+  char taskSdFontFamilyName[32] = "";
+  // Leave completed tasks out of the list view and the rendered pages.
+  uint8_t taskHideDone = 0;
   // Dictionary folder name under /dictionaries (empty = no dictionary)
   char dictionaryName[32] = "";
   // Show hidden files/directories (starting with '.') in the file browser (0 = hidden, 1 = show)
