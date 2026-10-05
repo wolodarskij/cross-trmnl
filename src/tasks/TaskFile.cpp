@@ -30,6 +30,45 @@ bool isDueToken(const char* p, const size_t avail) {
   return isDigits(d, 4) && d[4] == '-' && isDigits(d + 5, 2) && d[7] == '-' && isDigits(d + 8, 2);
 }
 
+// Seeded when /tasks holds no lists, so the menu opens on something usable and
+// the file doubles as a format reference. Lives in flash (.rodata); writing it
+// needs no heap.
+constexpr const char* kStarterListId = "todo";
+constexpr char kStarterList[] =
+    "# To do\n"
+    "- [x] Open this list\n"
+    "- [/] Press Confirm to change a task's state\n"
+    "- [ ] Hold Confirm, then Edit list, to change the text\n"
+    "- [ ] Give a task a due date          due:2026-12-31\n"
+    "\n"
+    "Lines that are not tasks, like this one, are kept as they are.\n";
+
+// Writes a new list file. A partial file is removed so a failed write cannot
+// leave a truncated list behind.
+bool writeNewList(const std::string& path, const char* data, const size_t len) {
+  bool ok = false;
+  {
+    HalFile f;
+    if (!Storage.openFileForWrite("TSK", path, f)) {
+      LOG_ERR("TSK", "Could not create list %s", path.c_str());
+      return false;
+    }
+    ok = f.write(data, len) == len;
+    f.flush();
+  }
+  if (!ok) {
+    LOG_ERR("TSK", "Short write on list %s", path.c_str());
+    Storage.remove(path.c_str());
+    return false;
+  }
+  LOG_INF("TSK", "Created list %s", path.c_str());
+  return true;
+}
+
+bool writeStarterList() {
+  return writeNewList(tasks::listPath(kStarterListId), kStarterList, sizeof(kStarterList) - 1);
+}
+
 char markerFor(const TaskState state) {
   switch (state) {
     case TaskState::Done:
@@ -45,9 +84,18 @@ char markerFor(const TaskState state) {
 
 namespace tasks {
 
+void ensureDir() {
+  if (Storage.exists(kTasksDir)) return;
+  if (!Storage.mkdir(kTasksDir)) {
+    LOG_ERR("TSK", "Could not create %s", kTasksDir);
+    return;
+  }
+  writeStarterList();
+}
+
 void scanLists(std::vector<std::string>& out) {
   out.clear();
-  if (!Storage.exists(kTasksDir)) Storage.mkdir(kTasksDir);
+  ensureDir();
 
   auto dir = Storage.open(kTasksDir);
   if (!dir || !dir.isDirectory()) {
@@ -68,10 +116,28 @@ void scanLists(std::vector<std::string>& out) {
     f.close();
   }
   dir.close();
+
+  // No lists yet (a fresh card, or a folder emptied by hand): seed one rather
+  // than leave the menu blank. The only list then is the starter, so there is
+  // nothing to sort.
+  if (out.empty()) {
+    if (writeStarterList()) out.emplace_back(kStarterListId);
+    return;
+  }
   FsHelpers::sortFileList(out);
 }
 
 std::string listPath(const std::string& listId) { return std::string(kTasksDir) + "/" + listId + ".md"; }
+
+bool createList(const std::string& listId) {
+  const std::string path = listPath(listId);
+  if (Storage.exists(path.c_str())) return true;
+  ensureDir();
+  // A heading plus one empty task, so the editor opens on a line that is
+  // already a checkbox and only needs its text typed after it.
+  const std::string body = "# " + listId + "\n- [ ] \n";
+  return writeNewList(path, body.data(), body.size());
+}
 
 }  // namespace tasks
 
@@ -236,6 +302,15 @@ bool TaskFile::load(const std::string& path) {
   hadTrailingNewline_ = current.empty() && !lines_.empty();
   if (!current.empty()) lines_.push_back(parseLine(std::move(current)));
   return true;
+}
+
+void TaskFile::unload() {
+  // clear() keeps the capacity; swapping with an empty vector releases it.
+  std::vector<TaskLine>().swap(lines_);
+  dirty_ = false;
+  error_ = Error::None;
+  loadedBytes_ = 0;
+  loadedLines_ = 0;
 }
 
 bool TaskFile::save() {

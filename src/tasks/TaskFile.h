@@ -12,12 +12,23 @@ namespace tasks {
 // never show up as lists themselves.
 inline constexpr const char* kTasksDir = "/tasks";
 
-// Stems (no extension) of the .md lists in /tasks, sorted. Creates the folder
-// when it is missing. Pure SD work, safe to call from onEnter().
+// Creates /tasks with a starter todo.md when the folder is missing. Called at
+// boot so the folder is already there to pick from in the Text editor. One FAT
+// lookup when the folder exists.
+void ensureDir();
+
+// Stems (no extension) of the .md lists in /tasks, sorted. Calls ensureDir(),
+// and also writes the starter list when the folder holds no .md lists. Pure SD
+// work, safe to call from onEnter().
 void scanLists(std::vector<std::string>& out);
 
 // "/tasks/<listId>.md"
 std::string listPath(const std::string& listId);
+
+// Writes "/tasks/<listId>.md" as a heading plus one empty task, ready for the
+// Text editor. True when the file exists afterwards; an existing list is left
+// untouched.
+bool createList(const std::string& listId);
 }  // namespace tasks
 
 // A Markdown checklist on the SD card.
@@ -71,6 +82,9 @@ class TaskFile {
   static constexpr size_t kMaxLines = 500;
 
   bool load(const std::string& path);
+  // Frees the line vector, capacity included, so another document (the Text
+  // editor's) can take the heap. Unsaved marks are dropped: save() first.
+  void unload();
   // Crash-safe: temp file -> flush -> close -> remove + rename, with the temp
   // dropped on any failure. Same shape as TextEditorActivity::saveFile().
   bool save();

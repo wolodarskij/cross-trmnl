@@ -28,6 +28,7 @@
 #include "BleInput.h"
 #include "CrossPointSettings.h"
 #include "CrossPointState.h"
+#include "Features.h"
 #include "KOReaderCredentialStore.h"
 #include "MappedInputManager.h"
 #include "OpdsServerStore.h"
@@ -42,6 +43,9 @@
 #include "platform/UsbSerialJtagHandoff.h"
 #include "util/ButtonNavigator.h"
 #include "util/ScreenshotUtil.h"
+#if CROSSPOINT_FEATURE_TASKS
+#include "tasks/TaskFile.h"
+#endif
 
 GfxRenderer renderer(display);
 MappedInputManager mappedInputManager(gpio, renderer);
@@ -439,6 +443,11 @@ void setup() {
   I18N.setLanguage(static_cast<Language>(SETTINGS.language));
   KOREADER_STORE.loadFromFile();
   OPDS_STORE.loadFromFile();
+#if CROSSPOINT_FEATURE_TASKS
+  // So /tasks is there to pick in the Text editor before the Tasks menu has
+  // ever been opened. A single exists() check once the folder is in place.
+  tasks::ensureDir();
+#endif
   UITheme::getInstance().reload();
   ButtonNavigator::setMappedInputManager(mappedInputManager);
 

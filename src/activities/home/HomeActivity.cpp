@@ -347,7 +347,7 @@ void HomeActivity::render(RenderLock&&) {
   menuIcons.push_back(Tasks);
 #endif
   menuItems.push_back(tr(STR_TEXT_EDITOR));
-  menuIcons.push_back(Text);
+  menuIcons.push_back(Editor);
   menuItems.push_back(tr(STR_SETTINGS_TITLE));
   menuIcons.push_back(Settings);
 

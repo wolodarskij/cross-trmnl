@@ -18,6 +18,7 @@
 #include "components/icons/bookmark.h"
 #include "components/icons/cover.h"
 #include "components/icons/dashboard.h"
+#include "components/icons/editor.h"
 #include "components/icons/folder.h"
 #include "components/icons/hotspot.h"
 #include "components/icons/library.h"
@@ -67,6 +68,8 @@ const uint8_t* iconForName(UIIcon icon) {
       return ScriptIcon;
     case UIIcon::Tasks:
       return TasksIcon;
+    case UIIcon::Editor:
+      return EditorIcon;
     default:
       return nullptr;
   }

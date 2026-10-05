@@ -3,11 +3,13 @@
 #include <GfxRenderer.h>
 #include <I18n.h>
 #include <Logging.h>
+#include <Memory.h>
 
 #include <cstdio>
 
 #include "CrossPointSettings.h"
 #include "MappedInputManager.h"
+#include "activities/editor/TextEditorActivity.h"
 #include "components/UITheme.h"
 #include "components/UiAppHelpers.h"
 #include "components/icons/taskStateIcons.h"
@@ -67,7 +69,10 @@ void TasksActivity::onEnter() {
 void TasksActivity::onExit() {
   // The only save that always runs: the device can sleep from here without
   // loop() getting a say, and ActivityManager runs onExit() on the way down.
-  saveAndRenderPages();
+  // Not while the editor is on top: file_ is unloaded then, the editor's own
+  // onExit() has already saved, and the pages catch up on the next render
+  // (the sleep screen and this screen both check the content stamp).
+  if (!editing_) saveAndRenderPages();
   Activity::onExit();
 }
 
@@ -150,11 +155,14 @@ void TasksActivity::onRowLongPress(const int index) {
 void TasksActivity::openOptions() {
   app.clearTapFlash();
   const std::vector<std::string> options = {
+      I18N.get(StrId::STR_TASK_EDIT),
       I18N.get(hideDone_ ? StrId::STR_TASK_SHOW_DONE : StrId::STR_TASK_HIDE_DONE),
       I18N.get(StrId::STR_TASK_EXPORT),
   };
   optionPopup.show(StrId::STR_TASK_OPTIONS, options, 0, [this](const int selected) {
     if (selected == 0) {
+      openEditor();
+    } else if (selected == 1) {
       hideDone_ = !hideDone_;
       // Persisted immediately: relying on a parent's result callback loses the
       // change when the screen is left via Home or sleep.
@@ -163,11 +171,47 @@ void TasksActivity::openOptions() {
       rebuildRows();
       const int last = static_cast<int>(rowItems_.size()) - 1;
       moveSelectionTo(nav.selected > last ? (last < 0 ? 0 : last) : nav.selected.load());
-    } else if (selected == 1) {
+    } else if (selected == 2) {
       showMessage(saveAndRenderPages() ? StrId::STR_TASK_EXPORTED : StrId::STR_TASK_EXPORT_FAILED);
     }
   });
   requestUpdate();
+}
+
+void TasksActivity::openEditor() {
+  if (editing_) return;
+  app.clearTapFlash();
+
+  // The editor reads the file from the card, so pending marks go there first.
+  if (file_.error() == TaskFile::Error::None && file_.isDirty() && !file_.save()) {
+    LOG_ERR("TSK", "Failed to save %s before editing", listId_.c_str());
+    showMessage(StrId::STR_EDITOR_SAVE_FAILED);
+    return;
+  }
+
+  auto editor = makeUniqueNoThrow<TextEditorActivity>(renderer, mappedInput, tasks::listPath(listId_));
+  if (!editor) {
+    LOG_ERR("TSK", "OOM: editor for %s", listId_.c_str());
+    return;
+  }
+
+  // Both documents are whole-file in RAM (16 KB list, 32 KB editor cap), so the
+  // list and its row strings are released before the editor loads its copy.
+  file_.unload();
+  std::vector<size_t>().swap(rowLines_);
+  std::vector<std::string>().swap(rowLabels_);
+  std::vector<std::string>().swap(rowValues_);
+  std::vector<freeink::ui::ListItem>().swap(rowItems_);
+  editing_ = true;
+
+  startActivityForResult(std::move(editor), [this](const ActivityResult&) {
+    editing_ = false;
+    file_.load(tasks::listPath(listId_));
+    rebuildRows();
+    const int last = static_cast<int>(rowItems_.size()) - 1;
+    moveSelectionTo(nav.selected > last ? (last < 0 ? 0 : last) : nav.selected.load());
+    requestUpdate();
+  });
 }
 
 bool TasksActivity::saveAndRenderPages() {
@@ -207,12 +251,19 @@ bool TasksActivity::handleButtons() {
     openOptions();
     return true;
   }
+  // Nothing to mark (an empty list, or one that would not load): Confirm goes
+  // straight to the editor, which is where such a list gets fixed.
+  if ((file_.error() != TaskFile::Error::None || rowItems_.empty()) &&
+      mappedInput.wasReleased(MappedInputManager::Button::Confirm)) {
+    openEditor();
+    return true;
+  }
   return UiListActivity::handleButtons();
 }
 
 void TasksActivity::drawFooter() {
   if (file_.error() != TaskFile::Error::None || rowItems_.empty()) {
-    const auto labels = mappedInput.mapLabels(tr(STR_BACK), "", "", "");
+    const auto labels = mappedInput.mapLabels(tr(STR_BACK), tr(STR_TASK_EDIT), "", "");
     GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
     return;
   }
@@ -266,6 +317,7 @@ void TasksActivity::render(RenderLock&& lock) {
       renderer.drawCenteredText(SMALL_FONT_ID, h / 2 + 14, tr(STR_TASK_SHOW_DONE));
     }
   }
+  renderer.drawCenteredText(SMALL_FONT_ID, h / 2 + 40, tr(STR_TASK_EDIT_HINT));
   drawFooter();
   renderer.displayBuffer();
 }

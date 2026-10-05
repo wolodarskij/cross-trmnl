@@ -15,7 +15,9 @@
 // Deliberately not an editor: Confirm cycles the selected task through
 // open -> in progress -> done and that is the whole of it. Writing task text
 // stays in TextEditorActivity, which already edits .md files — the two tools
-// share the files rather than duplicating each other's code.
+// share the files rather than duplicating each other's code. "Edit list" in the
+// options (and Confirm on an empty or unreadable list) hands the file over to
+// the editor and reloads it on return.
 //
 // Leaving the screen writes the list back (when anything changed) and re-renders
 // its BMP pages, so the Tasks sleep screen is current without the user having to
@@ -44,6 +46,9 @@ class TasksActivity final : public UiListActivity {
   // hide-done filter changes — never from buildScreen(), which runs per repaint.
   void rebuildRows();
   void openOptions();
+  // Saves pending marks, frees the list, opens it in TextEditorActivity, and
+  // reloads it when the editor returns.
+  void openEditor();
   // Writes the list back if dirty, then re-renders the pages if anything the
   // pages depend on changed. Returns false only when something actually failed.
   bool saveAndRenderPages();
@@ -52,6 +57,8 @@ class TasksActivity final : public UiListActivity {
   std::string listId_;
   TaskFile file_;
   bool hideDone_ = false;
+  // True while the editor is stacked on top and file_ is unloaded.
+  bool editing_ = false;
 
   // FreeInkUI rows hold raw const char*, so the backing strings have to outlive
   // every build. Parallel arrays, all indexed by row.

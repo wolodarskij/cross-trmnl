@@ -138,7 +138,8 @@ enum UIIcon {
   Blocks,
   Dashboard,
   Script,
-  Tasks
+  Tasks,
+  Editor
 };
 
 // Default theme implementation (Classic Theme)
